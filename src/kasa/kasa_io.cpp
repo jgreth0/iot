@@ -53,6 +53,7 @@ void kasa::decode(char* data, int len) {
 // address. The response is written into 'data'.
 ////////////////////////////////////////////////////////////////////////////////
 void kasa::send_recv(char* data, int data_len) {
+    char report_str[1024];
     int sock = socket(AF_INET, SOCK_STREAM, 0);
     // Set non-blocking so that timeouts can be enforced.
     fcntl(sock, F_SETFL, O_NONBLOCK);
@@ -71,16 +72,14 @@ void kasa::send_recv(char* data, int data_len) {
     if (pfd.revents) {
         // The socket is now open and accepting write data.
         // Send the encoded command.
-        if (VERBOSITY >= 5) {
-            printf("KASA: sending encoded message to %s;\n", addr);
-            printf("KASA: Message sent: %s.\n", data);
-        }
+        sprintf(report_str, "Message sent: %s", data);
+        report(report_str, 5);
         send(sock, data, encode(data), 0);
     }
     else {
         // The connection failed or timed out.
         // Close the socket and return a null result.
-        if (VERBOSITY >= 5) printf("KASA: connection failed.\n");
+        report("connection failed", 5);
         close(sock);
         data[0] = '\0';
         return;
@@ -97,16 +96,14 @@ void kasa::send_recv(char* data, int data_len) {
     if (pfd.revents) {
         // The socket has data to receive.
         // Fetch and decode it.
-        if (VERBOSITY >= 5) printf("KASA: decoding response from device.\n");
+        report("decoding response from the device", 5);
         decode(data, recv(sock, data, data_len, 0));
-        if (VERBOSITY >= 5) {
-            printf("KASA: Received encoded message from %s;\n", addr);
-            printf("KASA: Message received: %s.\n", data);
-        }
+        sprintf(report_str, "Message received: %s", data);
+        report(report_str, 5);
     }
     else {
         // The connection failed or timed out.
-        if (VERBOSITY >= 5) printf("KASA: error, no response.\n");
+        report("error, no response received from the device", 5);
         data[0] = '\0';
     }
     close(sock);
@@ -118,7 +115,7 @@ void kasa::send_recv(char* data, int data_len) {
 // If the target state is something other than ON or OFF, the state is
 // not changed but the current state is still queried and returned.
 ////////////////////////////////////////////////////////////////////////////////
-int kasa::sync_device() {
+int kasa::sync_device(int tgt) {
     char data[1024];
     if (tgt == ON)
         strcpy(data, "{\"system\":{\"set_relay_state\":{\"state\":1},\"get_sysinfo\":null}}");

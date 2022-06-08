@@ -27,63 +27,59 @@ int loop() {
     return 0;
 }
 
-void interactive() {
-    char name[64], cmd[64];
-    while (2 == scanf("%63s %63s", name, cmd)) {
+void interactive(char* name, char* addr) {
+    char cmd[64];
+    kasa k = kasa(name, addr);
+    while (2 == scanf("%63s", cmd)) {
         printf("Received command: %s\n", cmd);
         if (!strcmp(cmd, "ON" )) {
             printf("Turning on\n");
-            kasa::set_target(name, kasa::ON);
+            k.set_target(kasa::ON);
             printf("Done.\n");
         }
         if (!strcmp(cmd, "OFF")) {
             printf("Turning off\n");
-            kasa::set_target(name, kasa::OFF);
+            k.set_target(kasa::OFF);
             printf("Done.\n");
         }
         if (!strcmp(cmd, "SYNC" )) {
             printf("Force Sync\n");
-            kasa::force_sync_all();
+            k.sync_now();
             printf("Done.\n");
         }
     }
 }
 
 int main(int argc, char *argv[]) {
-    int verbosity = 1;
-    bool do_interactive = false;
-    char log_file[128];
+    char addr[64], name[64], log_file[128];
+    strcpy(name, "AIR_FILTER");
+    strcpy(addr, "10.72.0.2");
     strcpy(log_file, "kasa.log");
-    char conf_file[128];
-    strcpy(conf_file, "kasa.conf");
-
     for (int i = 1; i < argc; i++) {
-        if (!strcmp(argv[i], "-i")) {
-            do_interactive = true;
-        }
-        else if (!strcmp(argv[i], "-v") && (argc > i + 1)) {
-            verbosity = atoi(argv[i+1]);
+        if (!strcmp(argv[i], "-v") && (argc > i + 1)) {
+            module::set_verbosity(atoi(argv[i+1]));
             i++;
         }
         else if (!strcmp(argv[i], "-l") && (argc > i + 1)) {
-            strcpy(log_file, argv[i+1]);
+            module::set_log_file(argv[i+1]);
             i++;
         }
-        else if (!strcmp(argv[i], "-c") && (argc > i + 1)) {
-            strcpy(conf_file, argv[i+1]);
+        else if (!strcmp(argv[i], "-n") && (argc > i + 1)) {
+            strcpy(name, argv[i+1]);
+            i++;
+        }
+        else if (!strcmp(argv[i], "-a") && (argc > i + 1)) {
+            strcpy(addr, argv[i+1]);
             i++;
         }
         else {
+            printf("Commands are taken from stdin. Commands are:\n");
+            printf("  ON   : Sets the device target state to 'ON'.\n");
+            printf("  OFF  : Sets the device target state to 'OFF'.\n");
+            printf("  SYNC : Triggers all device states to be checked immediately.\n");
+            printf("\n");
             printf("Options are:\n");
-            printf("  -l <file name> : sets the log file.\n");
-            printf("    kasa.log is the default.\n");
-            printf("    Use \"\" to disable logging.\n");
-            printf("  -c <file name> : sets the config file.\n");
-            printf("    kasa.conf is the default.\n");
-            printf("    Each line of the config file contains:\n");
-            printf("      - a device name (no spaces),\n");
-            printf("      - a space, and\n");
-            printf("      - a device IPv4 address.\n");
+            printf("\n");
             printf("  -v <number> : sets the verbosiy level.\n");
             printf("    0 - OFF, only errors are reported.\n");
             printf("    1 - BASIC (default), basic startup and teardown events.\n");
@@ -92,35 +88,23 @@ int main(int argc, char *argv[]) {
             printf("    4 - FULL, currently same as MEDIUM\n");
             printf("    5 - DEBUG, includes function stop/start infos.\n");
             printf("\n");
-            printf("  -i : enables interactive mode\n");
-            printf("    Commands are taken from stdin. Commands are:\n");
-            printf("      <device name> ON  : Sets the device target state to 'ON'.\n");
-            printf("      <device name> OFF : Sets the device target state to 'OFF'.\n");
-            printf("      FORCE SYNC        : Triggers all device states to be checked immediately.\n");
-            printf("    In non-interactive mode, device states are logged at 15 second\n");
-            printf("      intervals, but there is no method to control devices.\n");
+            printf("  -l <file name> : log file.\n");
             printf("\n");
-            printf("In interactive mode, the session can be terminaled with ctrl-D or ctrl-C\n");
+            printf("  -n <name> : Name (for log entries).\n");
             printf("\n");
-            printf("In non-interactive mode, the session can be terminaled with ctrl-C\n");
+            printf("  -a <addr> : Address of the device.\n");
+            printf("\n");
             return 1;
         }
     }
 
+    module::set_log_file(log_file);
+
     signal(SIGTERM, signalHandler);
     signal(SIGINT , signalHandler);
 
-    kasa::load_conf(log_file, conf_file, verbosity);
-
-    if (do_interactive) {
-        interactive();
-    }
-    else {
-        std::thread thread = std::thread(loop);
-        thread.join();
-    }
-
-    kasa::stop_all();
+    std::thread thread = std::thread(interactive, name, addr);
+    thread.join();
 
     return 0;
 }
