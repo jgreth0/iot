@@ -1,0 +1,14 @@
+[Unit]
+Description=IOT Daemon
+After=network.target
+
+[Service]
+Type=exec
+ExecStart=/opt/iot/bin/iot -v 3
+WorkingDirectory=/var/iot/
+User=iot
+Group=iot
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
