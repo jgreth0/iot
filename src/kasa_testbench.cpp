@@ -11,41 +11,21 @@ void signalHandler(int signum) {
     fclose(stdin);
 }
 
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-void interactive(char* name, char* addr) {
-    char cmd[64];
-    kasa k = kasa(name, addr);
-    k.enable();
-    while (1 == scanf("%63s", cmd)) {
-        if (!strcmp(cmd, "ON" )) {
-            printf("Turning on\n");
-            k.set_target(kasa::ON);
-            printf("Done.\n");
+class kasa_testbench : public kasa {
+public:
+    static void interactive(kasa_testbench* k) {
+        char cmd[1024];
+        k->enable();
+        while (1 == scanf("%1023s", cmd)) {
+            k->send_recv(cmd, 1024, false);
+            printf("%s\n", cmd);
         }
-        if (!strcmp(cmd, "OFF")) {
-            printf("Turning off\n");
-            k.set_target(kasa::OFF);
-            printf("Done.\n");
-        }
-        if (!strcmp(cmd, "SYNC" )) {
-            printf("Trigger sync\n");
-            k.sync_now();
-            printf("Done.\n");
-        }
-        if (!strcmp(cmd, "SYNCW" )) {
-            printf("Sync and wait.\n");
-            k.sync_wait();
-            printf("Done.\n");
-        }
-        if (!strcmp(cmd, "QUERY" )) {
-            printf("Query.\n");
-            printf("State: %s\n", kasa::STATES[k.get_status()]);
-        }
+        k->disable();
     }
-    k.disable();
-}
+    kasa_testbench(char* name, char* addr, int cooldown = 15, int error_cooldown = 15) :
+        kasa { name, addr, cooldown, error_cooldown } {
+    }
+};
 
 ////////////////////////////////////////////////////////////////////////////////
 //
@@ -55,6 +35,7 @@ int main(int argc, char *argv[]) {
     strncpy(name, "TEST_PLUG", 64);
     strncpy(addr, "10.72.0.1", 64);
     strncpy(log_file, "kasa.log", 128);
+    module::set_verbosity(0);
     for (int i = 1; i < argc; i++) {
         if (!strcmp(argv[i], "-v") && (argc > i + 1)) {
             module::set_verbosity(atoi(argv[i+1]));
@@ -73,20 +54,8 @@ int main(int argc, char *argv[]) {
             i++;
         }
         else {
-            printf("./bin/kasa_standalone is allows the user to interact with the \"kasa\" class from the command line.\n");
-            printf("\n");
-            printf("Commands are taken from stdin. Commands are:\n");
-            printf("  ON    : Call set_target(kasa::ON)\n");
-            printf("          This sets the device target state to 'ON'.\n");
-            printf("  OFF   : Call set_target(kasa::OFF)\n");
-            printf("          This sets the device target state to 'OFF'.\n");
-            printf("  SYNC  : Call sync_now()\n");
-            printf("          This triggers all device states to be checked immediately.\n");
-            printf("  SYNCW : Call sync_wait()\n");
-            printf("          This triggers all device states to be checked immediately.\n");
-            printf("          Waits for the sync to complete before accepting another command.\n");
-            printf("  QUERY : Call get_status() can convert the result to a string with kasa::STATES[]\n");
-            printf("          Prints the current state.\n");
+            printf("./bin/kasa_testbench allows the user to interact directly with a kasa device.\n");
+            printf("Commands taken from stdin are sent directly to the device. Responses are printed to stdout.\n");
             printf("\n");
             printf("Options are:\n");
             printf("\n");
@@ -116,7 +85,8 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, signalHandler);
     signal(SIGINT , signalHandler);
 
-    std::thread thread = std::thread(interactive, name, addr);
+    kasa_testbench k = kasa_testbench(name, addr);
+    std::thread thread = std::thread(kasa_testbench::interactive, &k);
     thread.join();
 
     return 0;

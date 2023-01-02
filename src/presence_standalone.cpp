@@ -1,6 +1,5 @@
 
-#include "presence_tcp.hpp"
-#include "presence_icmp.hpp"
+#include "modules/presence_icmp.hpp"
 #include <csignal>
 #include <cstring>
 #include <stdio.h>
@@ -19,30 +18,25 @@ void signalHandler(int signum) {
 ////////////////////////////////////////////////////////////////////////////////
 void interactive(char* name, char* addr, int port) {
     char cmd[64];
-    presence_tcp  p_tcp  = presence_tcp (name, addr, port);
     presence_icmp p_icmp = presence_icmp(name, addr);
-    p_tcp.enable();
     p_icmp.enable();
     while (1 == scanf("%63s", cmd)) {
         if (!strcmp(cmd, "SYNC" )) {
             printf("Trigger sync\n");
-            p_tcp.sync_now();
             p_icmp.sync_now();
             printf("Done.\n");
         }
         if (!strcmp(cmd, "SYNCW" )) {
             printf("Sync and wait.\n");
-            p_tcp.sync_wait();
             p_icmp.sync_wait();
             printf("Done.\n");
         }
         if (!strcmp(cmd, "QUERY" )) {
             printf("Query.\n");
-            printf("TCP: %d; ICMP: %d\n", p_tcp.present(), p_icmp.present());
+            printf("ICMP: %d\n", p_icmp.present());
         }
     }
     p_icmp.disable();
-    p_tcp.disable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

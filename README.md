@@ -2,30 +2,26 @@
 # John Greth's IOT Utils
 
 This utility runs in the background and coordinates the functionality of home
-internet-of-things devices. Some features include:
+internet-of-things devices. Much of the configuration is hard coded in C++. This
+repo should be taken as a starting point or as a set of examples and not as a
+complete/polished solution. Some features include:
 
-- (MISSING) Turning on a dehumidifier when outside humidity is high
-- (DONE) Turning on an air filter at specified times, but not when the TV is on
-(to avoid the noise).
-- (MISSING) Turning on outdoor lights when the sun goes down and turning them
-off once everyone is home.
+- (DONE) Turning on an air filter at specified times.
+- (DONE) Turning on outdoor lights in the evening.
 - (DONE) Logging when devices turn on and off to estimate power usage.
+- (DONE) Simulate the linkage between a smart plug and a smart switch.
+- (MISSING) Turning on a dehumidifier when outside humidity is high.
 
 These features rely on underlying capabilities:
 
 - (DONE) Controlling and checking the state of smart plugs and switches.
-- (PARTIAL) Detecting the presence of the TV and everyone's cell phones on the
-network.
+- (PARTIAL) Detecting the presence of devices on the network.
 - (MISSING) Fetching weather condition and forecast from noaa (weather.gov)
 including temperature, humidity, and sunset/sunrise times.
 
 This utility is designed to be run 24/7 as a background process (or part of a
 background process) so that changes in device state can be recorded as they
 happen.
-
-In the current state, the server starts to misbehave if it runs continuously for
-over a month. There must be some kind of leak but it is difficult to debug
-errors that happen so infrequently.
 
 ## Installation
 
@@ -41,8 +37,8 @@ sudo ./install.sh
 
 ## TODO list
 
-- Implement the missing features above.
-- Add additional error catching and reporting to isolate instability issues.
+- Fetch and use weather data from the weather.gov api.
+- Add presence detection by querying the lease table of a kea dhcp server.
 - Add arp table refresher to keep the router's active client list up to date.
 
 ## Standalone Utilities
@@ -67,4 +63,27 @@ functionality.
 make -j4
 ./bin/kasa_standalone -h # usage
 ./bin/kasa_standalone -v 5 -l kasa.log -c kasa.conf -i
+```
+
+### KASA Testbench
+
+This utility establishes a connection to a kasa device and enables raw CLI
+access to that device. User input (json format) is encoded and sent to the
+device. Responses from the device are decoded and printed to the terminal. This
+is useful for testing out new device capabilities before adding them to the kasa
+module.
+
+```sh
+make -j4
+./bin/kasa_testbench -h # usage
+```
+
+### Presence Standalone
+
+Sets up a presence_icmp module to periodically ping the target network device to
+determine if it is connected to the network.
+
+```sh
+make -j4
+./bin/presence_standalone -h # usage
 ```

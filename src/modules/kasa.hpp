@@ -42,6 +42,9 @@ private:
     time_point last_time_on = now_floor(), last_time_off = now_floor();
     time_point connect_time;
     int res = UNKNOWN, tgt = UNCHANGED;
+    int res_brightness = 0;
+    int start_brightness = 0, end_brightness = 0;
+    time_point start_time = now_floor(), end_time = now_floor();
     std::mutex mtx;
 
     ////////////////////////////////////////////////////////////////////////////
@@ -62,6 +65,7 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     void decode(char* data, int len);
 
+protected:
     ////////////////////////////////////////////////////////////////////////////
     // The c_str in 'data' is sent to the kasa device. The response is written
     // into 'data'.
@@ -80,9 +84,8 @@ private:
     // cooldown period has completed. This ensures that the device is not
     // damaged by excessive/quick toggling on and off.
     ////////////////////////////////////////////////////////////////////////////
-    int sync_device(int tgt, bool last);
+    void sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness, bool last);
 
-protected:
     ////////////////////////////////////////////////////////////////////////////
     // Write the target state to the device and query the current state.
     // If the device state has changed, note the change in the log.
@@ -105,6 +108,13 @@ public:
     int get_target();
 
     ////////////////////////////////////////////////////////////////////////////
+    // Returns the state from the most recent device query.
+    // Call sync_wait() before this to ensure that the returned value is
+    // up-to-date.
+    ////////////////////////////////////////////////////////////////////////////
+    int get_brightness_status();
+
+    ////////////////////////////////////////////////////////////////////////////
     // When was the device last in the 'ON' state
     // If the device is currently in the 'ON' state, returns now_floor().
     ////////////////////////////////////////////////////////////////////////////
@@ -122,9 +132,16 @@ public:
     void set_target(int tgt);
 
     ////////////////////////////////////////////////////////////////////////////
+    // Sets the target device state which will be applied promptly.
+    ////////////////////////////////////////////////////////////////////////////
+    void set_brightness_target(int start_brightness, int end_brightness,
+                               time_point start_time, time_point end_time);
+
+    ////////////////////////////////////////////////////////////////////////////
     // Start the KASA runtime.
     ////////////////////////////////////////////////////////////////////////////
-    kasa(char* name, char* addr, int cooldown = 15, int error_cooldown = 15);
+    kasa(char* name, char* addr, int cooldown = 5, int error_cooldown = 15);
+    kasa(const char* name, const char* addr, int cooldown = 5, int error_cooldown = 15);
 };
 
 #endif

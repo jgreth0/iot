@@ -44,8 +44,10 @@ int kasa::encode(char* data) {
 ////////////////////////////////////////////////////////////////////////////////
 void kasa::decode(char* data, int len) {
     int msg_len = 0;
+    bool ret = true;
     for (int i = 0; i < 4; i++) msg_len = (msg_len << 8) + data[i];
     if (msg_len < len) len = msg_len;
+    if (len < 4) len = 4; // For safety in error cases.
     data[3] = 171;
     for (int i = 0; i < len-4; i++) data[i] = data[i+3] ^ data[i+4];
     data[len-4] = 0;
@@ -64,6 +66,9 @@ void kasa::send_recv(char* data, int data_len, bool last) {
         return;
     }
 
+    // Wait a random amount, up to 200ms, to avoid bursts.
+    usleep(1000 * (rand() % 250));
+
     bool error_detected = false;
 
     // Send the encoded command.
@@ -71,7 +76,9 @@ void kasa::send_recv(char* data, int data_len, bool last) {
     report(report_str, 6);
     int encode_len = encode(data);
 
-    if (encode_len != write(sock, data, encode_len)) {
+    if (sock == -1) {
+        error_detected = true;
+    } else if (encode_len != write(sock, data, encode_len)) {
         error_detected = true;
     } else {
         // Wait for a response.
@@ -87,7 +94,7 @@ void kasa::send_recv(char* data, int data_len, bool last) {
         if (connect_time + error_cooldown <= now_floor()) {
             error_detected = false;
 
-            report("Connection error. Retrying...", 5);
+            report("Connection error. Retrying...", 3);
 
             close(sock);
 
@@ -121,8 +128,12 @@ void kasa::send_recv(char* data, int data_len, bool last) {
             if (pfd.revents != POLLIN)
                 error_detected = true;
 
+            if (error_detected) {
+                report("Connection error was not resolved. Returning error.", 3);
+            }
+
         } else {
-            report("Connection error. Waiting...", 5);
+            report("Connection error. Waiting...", 4);
         }
     }
 
@@ -135,7 +146,6 @@ void kasa::send_recv(char* data, int data_len, bool last) {
         report(report_str, 6);
     }
     else {
-        report("Connection error was not resolved. Returning error.", 5);
         data[0] = '\0';
     }
 }
@@ -152,24 +162,41 @@ void kasa::send_recv(char* data, int data_len, bool last) {
 // cooldown period has completed. This ensures that the device is not damaged by
 // excessive/quick toggling on and off.
 ////////////////////////////////////////////////////////////////////////////////
-int kasa::sync_device(int tgt, bool last) {
+void kasa::sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness, bool last) {
+    *res_brightness = 100;
     report("sync_device() called.", 5);
-    char data[1024];
+    char data[4096];
+
+    if (tgt_brightness) {
+        snprintf(data, 4096, "{\"smartlife.iot.dimmer\":{\"set_brightness\":{\"brightness\":%d}}}", tgt_brightness);
+        send_recv(data, 4096, false);
+    }
+
     if (now_floor() - toggle_time < cooldown)
         tgt = UNCHANGED;
     if (tgt == ON) {
-        strncpy(data, "{\"system\":{\"set_relay_state\":{\"state\":1},\"get_sysinfo\":null}}", 1024);
+        strncpy(data, "{\"emeter\":{\"get_realtime\":null},\"system\":{\"set_relay_state\":{\"state\":1},\"get_sysinfo\":null}}", 4096);
         toggle_time = now_floor();
     } else if (tgt == OFF) {
-        strncpy(data, "{\"system\":{\"set_relay_state\":{\"state\":0},\"get_sysinfo\":null}}", 1024);
+        strncpy(data, "{\"emeter\":{\"get_realtime\":null},\"system\":{\"set_relay_state\":{\"state\":0},\"get_sysinfo\":null}}", 4096);
         toggle_time = now_floor();
     } else
-        strncpy(data, "{\"system\":{\"get_sysinfo\":null}}", 1024);
-    send_recv(data, 1024, last);
+        strncpy(data, "{\"emeter\":{\"get_realtime\":null},\"system\":{\"get_sysinfo\":null}}", 4096);
+
+    send_recv(data, 4096, last);
+
+    if (NULL != strstr(data, "\"relay_state\":1")) *res = ON;
+    else if (NULL != strstr(data, "\"relay_state\":0")) *res = OFF;
+    else *res = ERROR;
+
+    char* brightness_str = strstr(data, "\"brightness\":");
+    if (brightness_str) {
+        brightness_str += 13;
+        *res_brightness = atoi(brightness_str);
+    }
+    else *res_brightness = 0;
+
     report("sync_device() complete.", 5);
-    if (NULL != strstr(data, "\"relay_state\":1")) return ON;
-    if (NULL != strstr(data, "\"relay_state\":0")) return OFF;
-    return ERROR;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -181,16 +208,40 @@ int kasa::sync_device(int tgt, bool last) {
 void kasa::sync(bool last) {
     std::unique_lock<std::mutex> lck(mtx);
     int tgt = this->tgt;
+    int tgt_brightness = end_brightness;
+    time_point current_time = now_floor();
+    if (current_time <= start_time) {
+        tgt_brightness = start_brightness;
+    } else if (current_time >= end_time) {
+        tgt_brightness = end_brightness;
+    } else {
+        tgt_brightness = start_brightness +
+            (((end_brightness - start_brightness) *
+            (current_time - start_time)) /
+            (end_time - start_time));
+    }
+    if (tgt_brightness == res_brightness || res_brightness == 0)
+        tgt_brightness = 0;
     if (res == ON ) last_time_on  = now_floor();
     if (res == OFF) last_time_off = now_floor();
     lck.unlock();
-    int res = sync_device(tgt, last);
+    int res, res_brightness;
+    sync_device(tgt, tgt_brightness, &res, &res_brightness, last);
     lck.lock();
     if (res == ON ) last_time_on  = now_floor();
     if (res == OFF) last_time_off = now_floor();
 
     if (last) res = UNKNOWN;
 
+    if (res_brightness == end_brightness && current_time >= end_time) {
+        if (end_brightness == 100) {
+            end_brightness = 0;
+            start_brightness = 0;
+        } else {
+            end_brightness = 100;
+        }
+    }
+    this->res_brightness = res_brightness;
     if (res == this->tgt) this->tgt = UNCHANGED;
     if (this->res == res) return;
     // The value has changed.
@@ -274,13 +325,73 @@ void kasa::set_target(int tgt) {
     lck.unlock();
     sync_now();
     sprintf(report_str, "set_target(%s) done", STATES[tgt]);
+    report(report_str, 4);
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Returns the state from the most recent device query.
+// Call sync_wait() before this to ensure that the returned value is up-to-date.
+////////////////////////////////////////////////////////////////////////////////
+int kasa::get_brightness_status() {
+    report("get_brightness_status()", 5);
+    std::unique_lock<std::mutex> lck(mtx);
+    int res_brightness = this->res_brightness;
+    lck.unlock();
+    report("get_brightness_status() done", 5);
+    return res_brightness;
+}
+
+////////////////////////////////////////////////////////////////////////////////
+// Sets the target device state which will be applied promptly.
+////////////////////////////////////////////////////////////////////////////////
+void kasa::set_brightness_target(int start_brightness, int end_brightness,
+                                 time_point start_time, time_point end_time) {
+    char report_str[256];
+    sprintf(report_str, "set_brightness_target()");
     report(report_str, 3);
+    std::unique_lock<std::mutex> lck(mtx);
+    this->start_brightness = start_brightness;
+    this->end_brightness = end_brightness;
+    this->start_time = start_time;
+    this->end_time = end_time;
+    lck.unlock();
+    sync_now();
+    sprintf(report_str, "set_brightness_target() done");
+    report(report_str, 4);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
 // Start the KASA runtime.
 ////////////////////////////////////////////////////////////////////////////////
 kasa::kasa(char* name, char* addr, int cooldown, int error_cooldown) {
+    char name_full[64];
+    snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
+    set_name(name_full);
+    strncpy(this->addr, addr, 64);
+    this->cooldown = duration(cooldown);
+    this->error_cooldown = duration(error_cooldown);
+    connect_time = now_floor() - this->error_cooldown;
+
+    char report_str[256], time_str[64];
+    sprintf(report_str, "state: %s", STATES[ON]);
+    last_time_on = scan_report(report_str);
+    sprintf(report_str, "state: %s", STATES[OFF]);
+    last_time_off = scan_report(report_str);
+
+    time_t time = sc::to_time_t(last_time_on);
+    strftime(time_str, 64, "%c", std::localtime(&time));
+    sprintf(report_str, "init last_time_on: %s", time_str);
+    report(report_str, 3);
+
+    time = sc::to_time_t(last_time_off);
+    strftime(time_str, 64, "%c", std::localtime(&time));
+    sprintf(report_str, "init last_time_off: %s", time_str);
+    report(report_str, 3);
+
+    report("constructor done", 3);
+}
+
+kasa::kasa(const char* name, const char* addr, int cooldown, int error_cooldown) {
     char name_full[64];
     snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
     set_name(name_full);

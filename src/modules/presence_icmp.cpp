@@ -1,39 +1,87 @@
 
-#include "presence_tcp.hpp"
+#include "presence_icmp.hpp"
+
 #include <arpa/inet.h>
 #include <netinet/in.h>
-#include <stdio.h>
+#include <netinet/ip_icmp.h>
 #include <sys/socket.h>
-#include <unistd.h>
-#include <cstring>
 #include <poll.h>
 #include <fcntl.h>
+#include <errno.h>
+
+#include <unistd.h>
+
+#include <stdio.h>
+#include <cstring>
+#include <cstdio>
+#include <cstdlib>
+#include <stdint.h>
+#include <time.h>
+
+#include <sys/types.h>
+#include <netdb.h>
+#include <stdlib.h>
+#include <string.h>
+
+uint16_t checksum(void *b, int len) {
+    uint16_t *buf = (uint16_t*)b;
+    uint32_t sum = 0;
+
+    for (; len > 1; len -= 2) sum += *buf++;
+    if ( len == 1 ) sum += *(uint8_t*)buf;
+    while (sum > 0xFFFF) sum = (sum >> 16) + (sum & 0xFFFF);
+    return (uint16_t)(~sum);
+}
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////
-void presence_tcp::sync(bool last) {
+void presence_icmp::sync(bool last) {
+    char report_str[256];
+
     if (last) {
         report("DEVICE_PRESENCE_UNKNOWN", 2, true);
+        close(sock);
         return;
     }
-    int sock = socket(AF_INET, SOCK_STREAM, 0);
-    fcntl(sock, F_SETFL, O_NONBLOCK);
-    struct sockaddr_in serv_addr;
-    serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(port);
-    inet_pton(AF_INET, addr, &serv_addr.sin_addr);
-    connect(sock, (struct sockaddr*)&serv_addr, sizeof(serv_addr));
 
-    struct pollfd pfd;
-    pfd.fd = sock;
-    pfd.events = POLLOUT;
-    pfd.revents = 0;
-    int res = poll(&pfd, 1, 100);
+    // Wait a random amount, up to 500ms, to avoid bursts.
+    usleep(1000 * (rand() % 500));
 
-    char report_str[256];
-    snprintf(report_str, 256, "poll result = (%d); revents = 0x%x", res, pfd.revents);
-    report(report_str, 6);
+    // SOCK_RAW may be needed on other systems.
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);
+    if (sock < 0) {
+        snprintf(report_str, 256, "Socket Error: %d", errno);
+        report(report_str, 5);
+    } else {
+        report("Socket created", 5);
+    }
+
+    struct timeval tv_out = {.tv_usec = 100};
+    setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof tv_out);
+    int ttl_val = 8;
+    setsockopt(sock, SOL_IP, IP_TTL, &ttl_val, sizeof(ttl_val));
+
+    struct icmphdr pkt = {.type = ICMP_ECHO};
+    pkt.un.echo.id = htons(getpid() & 0xFFFF);
+    pkt.un.echo.sequence = seq_num++;
+    pkt.checksum = checksum(&pkt, sizeof(pkt));
+
+    struct sockaddr_in send_addr = {.sin_family = AF_INET}, recv_addr;
+    inet_pton(AF_INET, addr, &send_addr.sin_addr);
+
+    int res = sendto(sock, &pkt, sizeof(pkt), 0, (struct sockaddr*)&send_addr, sizeof(send_addr));
+
+    snprintf(report_str, 256, "Send result: %d", res);
+    report(report_str, 5);
+
+    int addr_len = sizeof(recv_addr);
+    res = recvfrom(sock, &pkt, sizeof(pkt), 0,(struct sockaddr*)&recv_addr, (socklen_t *)&addr_len);
+
+    snprintf(report_str, 256, "Receive result: %d, %d", res, pkt.type);
+    report(report_str, 5);
+    close(sock);
+    sock = -1;
 
     std::unique_lock<std::mutex> lck(mtx);
 
@@ -43,7 +91,7 @@ void presence_tcp::sync(bool last) {
         last_time_not_present = now_floor();
     // last_time_present is updated only at the times when we actually see the device.
 
-    if (pfd.revents == POLLOUT) {
+    if (pkt.type == ICMP_ECHOREPLY) {
         // The device was seen.
         last_time_present = now_floor();
         lck.unlock();
@@ -70,7 +118,7 @@ void presence_tcp::sync(bool last) {
 ////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////
-bool presence_tcp::present() {
+bool presence_icmp::present() {
     report("present() called", 5);
     std::unique_lock<std::mutex> lck(mtx);
     bool p = (now_floor() - last_time_present) < time_limit;
@@ -83,7 +131,7 @@ bool presence_tcp::present() {
 // When was the device last detected
 // If the device was detected within the time limit, returns now_floor()
 ////////////////////////////////////////////////////////////////////////////
-presence_tcp::time_point presence_tcp::get_last_time_present() {
+presence_icmp::time_point presence_icmp::get_last_time_present() {
     report("get_last_time_present() called", 5);
     std::unique_lock<std::mutex> lck(mtx);
     bool p = (now_floor() - last_time_present) < time_limit;
@@ -98,7 +146,7 @@ presence_tcp::time_point presence_tcp::get_last_time_present() {
 // When was the device last undetected for at least time_limit seconds?
 // If the device was not detected within the time limit, returns now_floor()
 ////////////////////////////////////////////////////////////////////////////
-presence_tcp::time_point presence_tcp::get_last_time_not_present() {
+presence_icmp::time_point presence_icmp::get_last_time_not_present() {
     report("get_last_time_not_present() called", 5);
     std::unique_lock<std::mutex> lck(mtx);
     bool p = (now_floor() - last_time_present) < time_limit;
@@ -112,14 +160,14 @@ presence_tcp::time_point presence_tcp::get_last_time_not_present() {
 ////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////
-presence_tcp::presence_tcp(char* name, char* addr, int port, int time_limit) {
+presence_icmp::presence_icmp(char* name, char* addr, int time_limit) {
     strncpy(this->addr, addr, 64);
     char name_full[64];
-    snprintf(name_full, 64, "PRESENCE TCP [ %s @ %s ]", name, addr);
+    snprintf(name_full, 64, "PRESENCE ICMP [ %s @ %s ]", name, addr);
     set_name(name_full);
     this->time_limit = duration(time_limit);
     last_time_present = now_floor() - this->time_limit;
     last_time_not_present = last_time_not_present;
-    this->port = port;
+
     report("constructor done", 3);
 }

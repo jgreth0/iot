@@ -1,33 +1,29 @@
 CPPFLAGS=-std=c++17 -g -rdynamic -pthread -O0 -c
-LDFLAGS= -std=c++17 -g -rdynamic -pthread -O0
-OBJ= \
-	obj/kasa.o \
-	obj/module.o \
-	obj/presence_tcp.o \
-	obj/presence_icmp.o \
-	obj/signal_handler.o \
-	obj/shmem.o
+LDFLAGS= -std=c++17 -g -rdynamic -pthread -O0 -lcurl -ljsoncpp
+MODULE_OBJ= \
+    obj/modules/kasa.o \
+    obj/modules/module.o \
+    obj/modules/presence_icmp.o \
+    obj/modules/presence_wrap.o \
+    obj/modules/shmem.o \
+    obj/modules/signal_handler.o
 
-$(shell mkdir -p obj bin)
+$(shell mkdir -p obj/modules bin)
 
-.PHONY: all
+.PHONY: all clean
 
-all: bin/iot bin/kasa_standalone bin/presence_standalone bin/home_assistant
+.SECONDARY:
 
-bin/iot: obj/iot.o $(OBJ)
-	g++ $(LDFLAGS) -o $@ $^
+all: bin/sandbox bin/iot bin/kasa_standalone bin/presence_standalone
 
-bin/kasa_standalone: obj/kasa_standalone.o $(OBJ)
-	g++ $(LDFLAGS) -o $@ $^
-
-bin/presence_standalone: obj/presence_standalone.o $(OBJ)
-	g++ $(LDFLAGS) -o $@ $^
-
-bin/home_assistant: obj/home_assistant.o $(OBJ)
-	g++ $(LDFLAGS) -o $@ $^
-
-obj/%.o: src/%.cpp src/*.hpp Makefile
+obj/%.o: src/%.cpp src/modules/*.hpp Makefile
 	g++ $(CPPFLAGS) src/$*.cpp -o obj/$*.o
+
+obj/iot.o: src/iot.cpp src/automations/*.hpp src/modules/*.hpp Makefile
+	g++ $(CPPFLAGS) src/iot.cpp -o obj/iot.o
+
+bin/%: obj/%.o $(MODULE_OBJ)
+	g++ $(LDFLAGS) -o $@ $^
 
 clean:
 	rm -rf obj bin

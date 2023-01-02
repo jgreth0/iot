@@ -1,10 +1,8 @@
 
-#include "shmem.hpp"
-#include "presence.hpp"
-#include "presence_icmp.hpp"
-#include "kasa.hpp"
-#include "air_filter.hpp"
-#include "signal_handler.hpp"
+#include "modules/signal_handler.hpp"
+#include "automations/air_filter.hpp"
+#include "automations/switch_plug.hpp"
+#include "automations/outside_lights.hpp"
 
 #include <execinfo.h>
 #include <unistd.h>
@@ -34,33 +32,69 @@ void iot() {
 
     signal_handler sigio_handler = signal_handler(SIGIO);
 
-    strncpy(name, "media", 64);
-    strncpy(addr, "10.2.0.3", 64);
-    presence_icmp media_presence = presence_icmp(name, addr);
-    media_presence.enable();
-
-
-    strncpy(name, "air filter", 64);
-    strncpy(addr, "10.4.0.2", 64);
-    kasa air_filter_plug = kasa(name, addr);
+    kasa air_filter_plug = kasa("air_filter", "10.4.0.2");
     air_filter_plug.enable();
+
+    kasa kasa_bed_switch = kasa("bed_switch", "10.4.1.9");
+    kasa_bed_switch.enable();
+
+    kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.0.1");
+    kasa_bed_plug_low.enable();
+
+    kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1");
+    kasa_bed_plug_high.enable();
+
+    kasa kasa_office_switch = kasa("office_switch", "10.4.1.2");
+    kasa_office_switch.enable();
+
+    kasa kasa_office_plug = kasa("office_plug", "10.4.2.1");
+    kasa_office_plug.enable();
+
+    const int front_ct = 4;
+    kasa front_lights[front_ct] = {
+        kasa("light_tree_xmas", "10.4.2.4"),
+        kasa("light_front_porch", "10.4.1.1"),
+        kasa("light_front_pole", "10.4.3.2"),
+        kasa("light_front_garage", "10.4.1.3")};
+    for (int i = 0; i < front_ct; i++) front_lights[i].enable();
+
+    const int rear_ct = 4;
+    kasa rear_lights[rear_ct] = {
+        kasa("light_rear_garage", "10.4.1.4"),
+        kasa("light_rear_deck", "10.4.1.5"),
+        kasa("light_rear_flood", "10.4.1.6"),
+        kasa("light_rear_basement", "10.4.1.7")};
+    for (int i = 0; i < rear_ct; i++) rear_lights[i].enable();
 
     // Automations use modules to acheive high-level objectives.
 
-    air_filter af = air_filter(&media_presence, &air_filter_plug);
+    air_filter af = air_filter(&air_filter_plug);
     af.enable();
+
+    switch_plug sp = switch_plug(&kasa_bed_switch, &kasa_bed_plug_low, &kasa_bed_plug_high,
+        &kasa_office_switch, &kasa_office_plug);
+    sp.enable();
+
+    outside_lights ol = outside_lights(front_lights, front_ct, rear_lights, rear_ct);
+    ol.enable();
 
     while (!done) cv.wait(lck);
 
+    ol.disable();
+    sp.disable();
     af.disable();
+
+    for (int i = 0; i < rear_ct; i++) rear_lights[i].disable();
+    for (int i = 0; i < front_ct; i++) front_lights[i].disable();
+    kasa_bed_plug_high.disable();
+    kasa_bed_plug_low.disable();
+    kasa_bed_switch.disable();
     air_filter_plug.disable();
-    media_presence.disable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
 // Terminate the "iot()" thread on interrupt.
+////////////////////////////////////////////////////////////////////////////////
 void signalHandler(int signum) {
     if (signum == SIGSEGV) {
         void *array[50];
