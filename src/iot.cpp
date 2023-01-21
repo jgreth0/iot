@@ -32,38 +32,54 @@ void iot() {
 
     signal_handler sigio_handler = signal_handler(SIGIO);
 
-    kasa air_filter_plug = kasa("air_filter", "10.4.0.2");
+    // Monitor only
+    kasa shed_lights = kasa("light_shed", "10.4.1.8", 5);
+    shed_lights.enable();
+    kasa garage_lights = kasa("light_garage", "10.4.3.1", 5);
+    garage_lights.enable();
+    kasa freezer = kasa("freezer", "10.4.2.2", 5);
+    freezer.enable();
+    kasa car = kasa("car", "10.4.2.3", 5);
+    car.enable();
+    // kasa dehumidifier = kasa("dehumidifier", "10.4.2.5", 5);
+    // dehumidifier.enable();
+    kasa tv_plug = kasa("tv_plug", "10.4.2.6", 5);
+    tv_plug.enable();
+    // kasa plug_pm_7 = kasa("plug_pm_7", "10.4.2.7", 5);
+    // plug_pm_7.enable();
+    // kasa plug_pm_8 = kasa("plug_pm_8", "10.4.2.8", 5);
+    // plug_pm_8.enable();
+
+    // Air filter control
+    kasa air_filter_plug = kasa("air_filter", "10.4.0.2", 5);
     air_filter_plug.enable();
 
-    kasa kasa_bed_switch = kasa("bed_switch", "10.4.1.9");
+    // Switch+plug
+    kasa kasa_bed_switch = kasa("bed_switch", "10.4.1.9", 1);
     kasa_bed_switch.enable();
-
-    kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.0.1");
+    kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.0.1", 5);
     kasa_bed_plug_low.enable();
-
-    kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1");
+    kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1", 5);
     kasa_bed_plug_high.enable();
-
-    kasa kasa_office_switch = kasa("office_switch", "10.4.1.2");
+    kasa kasa_office_switch = kasa("office_switch", "10.4.1.2", 1);
     kasa_office_switch.enable();
-
-    kasa kasa_office_plug = kasa("office_plug", "10.4.2.1");
+    kasa kasa_office_plug = kasa("office_plug", "10.4.2.1", 5);
     kasa_office_plug.enable();
 
-    const int front_ct = 4;
+    // Outside lights
+    const int front_ct = 3;
     kasa front_lights[front_ct] = {
-        kasa("light_tree_xmas", "10.4.2.4"),
-        kasa("light_front_porch", "10.4.1.1"),
-        kasa("light_front_pole", "10.4.3.2"),
-        kasa("light_front_garage", "10.4.1.3")};
+        kasa("light_tree_xmas", "10.4.2.4", 5),
+        kasa("light_front_porch", "10.4.1.1", 5),
+        kasa("light_front_pole", "10.4.3.2", 5)};
     for (int i = 0; i < front_ct; i++) front_lights[i].enable();
-
-    const int rear_ct = 4;
+    const int rear_ct = 5;
     kasa rear_lights[rear_ct] = {
-        kasa("light_rear_garage", "10.4.1.4"),
-        kasa("light_rear_deck", "10.4.1.5"),
-        kasa("light_rear_flood", "10.4.1.6"),
-        kasa("light_rear_basement", "10.4.1.7")};
+        kasa("light_rear_garage", "10.4.1.4", 5),
+        kasa("light_rear_deck", "10.4.1.5", 5),
+        kasa("light_rear_flood", "10.4.1.6", 5),
+        kasa("light_rear_basement", "10.4.1.7", 5),
+        kasa("light_front_garage", "10.4.1.3", 5)};
     for (int i = 0; i < rear_ct; i++) rear_lights[i].enable();
 
     // Automations use modules to acheive high-level objectives.
@@ -80,16 +96,34 @@ void iot() {
 
     while (!done) cv.wait(lck);
 
+    // Automations
     ol.disable();
     sp.disable();
     af.disable();
 
+    // Outside lights
     for (int i = 0; i < rear_ct; i++) rear_lights[i].disable();
     for (int i = 0; i < front_ct; i++) front_lights[i].disable();
+
+    // Switch+plug
     kasa_bed_plug_high.disable();
     kasa_bed_plug_low.disable();
     kasa_bed_switch.disable();
+    kasa_office_switch.disable();
+    kasa_office_plug.disable();
+
+    // Air filter control
     air_filter_plug.disable();
+
+    // Monitor only
+    shed_lights.disable();
+    garage_lights.disable();
+    freezer.disable();
+    car.disable();
+    // dehumidifier.disable();
+    tv_plug.disable();
+    // plug_pm_7.disable();
+    // plug_pm_8.disable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////

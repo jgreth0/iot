@@ -39,14 +39,21 @@ protected:
         if (last) {
             return;
         }
-        bool rear_are_on = false;
+        bool rear_are_on = false, rear_are_not_off = false;
         time_point current_time = now_floor();
+        time_point rear_time = current_time;
         int key_id = get_key_id(current_time);
+
         for (int i = 0; i < rear_ct; i++) {
             rear_lights[i].heart_beat_missed();
             int tgt = rear_lights[i].get_target();
             int res = rear_lights[i].get_status();
-            if (current_time - rear_lights[i].get_last_time_on() < duration(900)) rear_are_on = true;
+            if (res == kasa::ON) rear_are_on = true;
+            if (current_time < rear_lights[i].get_last_time_on() + duration(900)) {
+                rear_are_not_off = true;
+                if (rear_time < rear_lights[i].get_last_time_on() + duration(900))
+                    rear_time = rear_lights[i].get_last_time_on() + duration(900);
+            }
             if ((tgt == kasa::ON || tgt == kasa::OFF) && res != tgt) continue;
             if (res == kasa::ON) {
                 // Turn off all outside lights in the morning.
@@ -54,6 +61,15 @@ protected:
                     rear_lights[i].set_target(kasa::OFF);
             }
         }
+
+        if (!rear_are_on && rear_are_not_off) {
+            // None of the rear lights are on, but they haven't been off long
+            // enough to be sure that it isn't a momentary error or user error.
+            // Wait until all of the lights have been off for at least 15
+            // minutes before responding.
+            set_sync_time(rear_time);
+        }
+
         for (int i = 0; i < front_ct; i++) {
             front_lights[i].heart_beat_missed();
             int tgt = front_lights[i].get_target();
@@ -64,7 +80,7 @@ protected:
                 if (front_lights[i].get_last_time_off() < get_key_time(current_time, 0))
                     front_lights[i].set_target(kasa::OFF);
             }
-            else if (res == kasa::ON && key_id == 2 && !rear_are_on) {
+            else if (res == kasa::ON && key_id == 2 && !rear_are_not_off) {
                 // Turn off front lights at night.
                 if (front_lights[i].get_last_time_off() < get_key_time(current_time, 2))
                     front_lights[i].set_target(kasa::OFF);
@@ -74,7 +90,7 @@ protected:
                 if (front_lights[i].get_last_time_on() < get_key_time(current_time, 1))
                     front_lights[i].set_target(kasa::ON);
             }
-            else if (res == kasa::OFF && key_id == 2 && rear_are_on) {
+            else if (res == kasa::OFF && key_id == 2 && rear_are_not_off) {
                 // Turn the front lights on at night if the rear lights are on (unlikely case).
                 if (front_lights[i].get_last_time_on() < get_key_time(current_time, 1))
                     front_lights[i].set_target(kasa::ON);

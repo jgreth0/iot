@@ -162,7 +162,8 @@ void kasa::send_recv(char* data, int data_len, bool last) {
 // cooldown period has completed. This ensures that the device is not damaged by
 // excessive/quick toggling on and off.
 ////////////////////////////////////////////////////////////////////////////////
-void kasa::sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness, bool last) {
+void kasa::sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness,
+        int* res_power_mw, int* res_total_wh, bool last) {
     *res_brightness = 100;
     report("sync_device() called.", 5);
     char data[4096];
@@ -189,12 +190,26 @@ void kasa::sync_device(int tgt, int tgt_brightness, int* res, int* res_brightnes
     else if (NULL != strstr(data, "\"relay_state\":0")) *res = OFF;
     else *res = ERROR;
 
-    char* brightness_str = strstr(data, "\"brightness\":");
-    if (brightness_str) {
-        brightness_str += 13;
-        *res_brightness = atoi(brightness_str);
+    char* res_str = strstr(data, "\"brightness\":");
+    if (res_str) {
+        res_str += 13;
+        *res_brightness = atoi(res_str);
     }
     else *res_brightness = 0;
+
+    res_str = strstr(data, "\"power_mw\":");
+    if (res_str) {
+        res_str += 11;
+        *res_power_mw = atoi(res_str);
+    }
+    else *res_power_mw = -1;
+
+    res_str = strstr(data, "\"total_wh\":");
+    if (res_str) {
+        res_str += 11;
+        *res_total_wh = atoi(res_str);
+    }
+    else *res_total_wh = -1;
 
     report("sync_device() complete.", 5);
 }
@@ -222,14 +237,25 @@ void kasa::sync(bool last) {
     }
     if (tgt_brightness == res_brightness || res_brightness == 0)
         tgt_brightness = 0;
-    if (res == ON ) last_time_on  = now_floor();
-    if (res == OFF) last_time_off = now_floor();
+    if (!recent_error) {
+        if (res == ON ) last_time_on  = now_floor();
+        if (res == OFF) last_time_off = now_floor();
+    }
     lck.unlock();
     int res, res_brightness;
-    sync_device(tgt, tgt_brightness, &res, &res_brightness, last);
+    int res_power_mw, res_total_wh;
+    sync_device(tgt, tgt_brightness, &res, &res_brightness,
+        &res_power_mw, &res_total_wh, last);
     lck.lock();
-    if (res == ON ) last_time_on  = now_floor();
-    if (res == OFF) last_time_off = now_floor();
+    if (res == ON ) {
+        last_time_on  = now_floor();
+        recent_error = false;
+    }
+    if (res == OFF) {
+        last_time_off = now_floor();
+        recent_error = false;
+    }
+    if (res == ERROR) recent_error = true;
 
     if (last) res = UNKNOWN;
 
@@ -242,15 +268,25 @@ void kasa::sync(bool last) {
         }
     }
     this->res_brightness = res_brightness;
+    if (res_power_mw != -1) this->res_power_mw = res_power_mw;
+    if (res_total_wh != -1) this->res_total_wh = res_total_wh;
     if (res == this->tgt) this->tgt = UNCHANGED;
     if (this->res == res) return;
     // The value has changed.
+    // Don't acknowledge an error unless it has been persistent.
+    if ((res == ERROR) &&
+        (error_cooldown > current_time - last_time_on) &&
+        (error_cooldown > current_time - last_time_off)) return;
     int res_prev = this->res;
     this->res = res;
     lck.unlock();
     char report_str[256];
     sprintf(report_str, "state: %s", STATES[res_prev]);
     report(report_str, 2, true);
+    if (this->res_total_wh != -1) {
+        sprintf(report_str, "power: %d", res_total_wh);
+        report(report_str, 2, true);
+    }
     sprintf(report_str, "state: %s", STATES[res]);
     report(report_str, 2, true);
     notify_listeners();
@@ -298,6 +334,24 @@ int kasa::get_status() {
     int res = this->res;
     lck.unlock();
     report("get_status() done", 5);
+    return res;
+}
+
+int kasa::get_power_mw() {
+    report("get_power_mw()", 5);
+    std::unique_lock<std::mutex> lck(mtx);
+    int res = this->res_power_mw;
+    lck.unlock();
+    report("get_power_mw() done", 5);
+    return res;
+}
+
+int kasa::get_total_wh() {
+    report("get_total_wh()", 5);
+    std::unique_lock<std::mutex> lck(mtx);
+    int res = this->res_total_wh;
+    lck.unlock();
+    report("get_total_wh() done", 5);
     return res;
 }
 
@@ -363,7 +417,8 @@ void kasa::set_brightness_target(int start_brightness, int end_brightness,
 ////////////////////////////////////////////////////////////////////////////////
 // Start the KASA runtime.
 ////////////////////////////////////////////////////////////////////////////////
-kasa::kasa(char* name, char* addr, int cooldown, int error_cooldown) {
+kasa::kasa(char* name, char* addr, int update_frequency,
+        int cooldown, int error_cooldown) : module(true, update_frequency) {
     char name_full[64];
     snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
     set_name(name_full);
@@ -391,7 +446,8 @@ kasa::kasa(char* name, char* addr, int cooldown, int error_cooldown) {
     report("constructor done", 3);
 }
 
-kasa::kasa(const char* name, const char* addr, int cooldown, int error_cooldown) {
+kasa::kasa(const char* name, const char* addr, int update_frequency,
+        int cooldown, int error_cooldown) : module(true, update_frequency) {
     char name_full[64];
     snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
     set_name(name_full);

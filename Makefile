@@ -14,7 +14,7 @@ $(shell mkdir -p obj/modules bin)
 
 .SECONDARY:
 
-all: bin/sandbox bin/iot bin/kasa_standalone bin/presence_standalone
+all: bin/sandbox bin/iot bin/kasa_standalone bin/kasa_testbench bin/presence_standalone
 
 obj/%.o: src/%.cpp src/modules/*.hpp Makefile
 	g++ $(CPPFLAGS) src/$*.cpp -o obj/$*.o

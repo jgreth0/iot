@@ -1,6 +1,9 @@
 [Unit]
 Description=IOT Daemon
-After=network.target
+Wants=ifup@eth0.4.service
+Wants=chrony-time-wait-sync.service
+After=ifup@eth0.4.service
+After=chrony-time-wait-sync.service
 
 [Service]
 Type=exec

@@ -22,7 +22,8 @@ void module::management_thread(module* m) {
             // Round up.
             uint64_t uf = m->update_frequency;
             m->next_sync_time = time_point(duration(
-                ((m->now_ceil().time_since_epoch().count() + uf - 1 ) / uf) * uf));
+                (((m->now_ceil().time_since_epoch().count() + uf - 1 ) / uf) * uf) +
+                (rand() % m->update_frequency)));
         } else {
             int id;
             std::time_t tt = sc::to_time_t(m->now_floor());
@@ -299,28 +300,28 @@ void module::report(char* text, int verbosity, bool log) {
     time_t time = sc::to_time_t(now_floor());
     strftime(time_str, 64, "%c", std::localtime(&time));
 
-    if (log) {
-        if (log_file[0]) {
-            FILE* f = fopen(log_file, "a");
-            if (f) {
-                fprintf(f, "%s ; %s ; %s\n", time_str, name, text);
-                fflush(f);
-                fclose(f);
-            } else {
-                printf("Failed to open log file (%d): ", errno);
-                fflush(stdout);
-                printf("%s\n", log_file);
-                fflush(stdout);
+    if (verbosity_limit >= verbosity) {
+        if (log) {
+            if (log_file[0]) {
+                FILE* f = fopen(log_file, "a");
+                if (f) {
+                    fprintf(f, "%s ; %s ; %s\n", time_str, name, text);
+                    fflush(f);
+                    fclose(f);
+                } else {
+                    printf("Failed to open log file (%d): ", errno);
+                    fflush(stdout);
+                    printf("%s\n", log_file);
+                    fflush(stdout);
+                }
             }
-        }
-        if (verbosity_limit >= verbosity) {
             printf("%s ; %s ; log <- %s\n", time_str, name, text);
             fflush(stdout);
         }
-    }
-    else if (verbosity_limit >= verbosity) {
-        printf("%s ; %s ; %s\n", time_str, name, text);
-        fflush(stdout);
+        else {
+            printf("%s ; %s ; %s\n", time_str, name, text);
+            fflush(stdout);
+        }
     }
 }
 

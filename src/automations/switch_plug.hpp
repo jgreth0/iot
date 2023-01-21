@@ -139,50 +139,80 @@ protected:
         // keys 1 and 2 are only used for dimmer states.
         if (key_id != 3) key_id = 0;
 
+        // Time control
+        // Update time and res values to prevent additional updates below.
         if (get_key_time(current_time, key_id) > bed_switch_time) {
-            // Time-based events
-            // Turn switch on in the morning and in the evening
-            if (bed_switch_res == kasa::OFF)
+            if (bed_switch_res == kasa::OFF) {
                 kasa_bed_switch->set_target(kasa::ON);
-            if (get_key_time(current_time, key_id) > bed_plug_low_time) {
-                // Turn low lights on in the morning and in the evening
-                if (bed_plug_low_res == kasa::OFF)
-                    kasa_bed_plug_low->set_target(kasa::ON);
+                bed_switch_res = kasa::ON;
+                bed_switch_time = current_time;
             }
-            if (get_key_time(current_time, key_id) > bed_plug_high_time) {
-                // Turn high lights off in the evening
-                if ((bed_plug_high_res == kasa::ON) && (key_id == 3))
-                    kasa_bed_plug_high->set_target(kasa::OFF);
-                // Turn high lights on in the morning
-                if ((bed_plug_high_res == kasa::OFF) && (key_id != 3))
-                    kasa_bed_plug_high->set_target(kasa::ON);
+        }
+        if (get_key_time(current_time, key_id) > bed_plug_low_time) {
+            if (bed_plug_low_res == kasa::OFF) {
+                kasa_bed_plug_low->set_target(kasa::ON);
+                bed_plug_low_res = kasa::ON;
+                bed_plug_low_time = current_time;
             }
-        } else {
-            // Switch control.
-            if (!bed_switch_error && !bed_plug_low_error &&
-                    (bed_switch_res != bed_plug_low_res) &&
-                    (bed_switch_time > bed_plug_low_time)) {
-                // Turn lights on/off per switch
-                kasa_bed_plug_low->set_target(bed_switch_res);
+        }
+        if (get_key_time(current_time, key_id) > bed_plug_high_time) {
+            if ((bed_plug_high_res == kasa::ON) && (key_id == 3)) {
+                kasa_bed_plug_high->set_target(kasa::OFF);
+                bed_plug_high_res = kasa::OFF;
+                bed_plug_high_time = current_time;
             }
-            if (!bed_switch_error && !bed_plug_high_error &&
-                    (bed_switch_res != bed_plug_high_res) &&
-                    (bed_switch_time > bed_plug_high_time)) {
-                // Turn lights on/off per switch
-                // High lights don't turn on in the evening.
-                if ((key_id != 3) || (bed_plug_high_res == kasa::ON))
-                    kasa_bed_plug_high->set_target(bed_switch_res);
+            if ((bed_plug_high_res == kasa::OFF) && (key_id != 3)) {
+                kasa_bed_plug_high->set_target(kasa::ON);
+                bed_plug_high_res = kasa::ON;
+                bed_plug_high_time = current_time;
             }
-            if (!bed_switch_error && !bed_plug_low_error && !bed_plug_high_error &&
-                    (bed_switch_res != bed_plug_low_res) &&
-                    (bed_switch_res != bed_plug_high_res) &&
-                    (bed_plug_low_res == bed_plug_high_res) &&
-                    (bed_switch_time < bed_plug_low_time) &&
-                    (bed_switch_time < bed_plug_high_time)) {
-                // Plugs have changed more recently than the switch.
-                // Update the switch to be consistent.
-                kasa_bed_switch->set_target(bed_plug_low_res);
+        }
+        if (current_time >= get_key_time(current_time, key_id) + duration(60*60*4)) {
+            // Shut off the lights after 4 hours in case we forget or go on vacation.
+            if ((bed_plug_low_res == kasa::ON) && (current_time >= bed_plug_low_time + duration(60*60*4))) {
+                kasa_bed_plug_low->set_target(kasa::OFF);
+                bed_plug_low_res = kasa::OFF;
+                bed_plug_low_time = current_time;
             }
+
+            if ((bed_plug_high_res == kasa::ON) && (current_time >= bed_plug_high_time + duration(60*60*4))) {
+                kasa_bed_plug_high->set_target(kasa::OFF);
+                bed_plug_high_res = kasa::OFF;
+                bed_plug_high_time = current_time;
+            }
+        }
+
+        // Switch control.
+        if (!bed_switch_error && !bed_plug_low_error &&
+                (bed_switch_res != bed_plug_low_res) &&
+                (bed_switch_time > bed_plug_low_time)) {
+            // Turn lights on/off per switch
+            kasa_bed_plug_low->set_target(bed_switch_res);
+            bed_plug_low_res = bed_switch_res;
+            bed_plug_low_time = current_time;
+        }
+        if (!bed_switch_error && !bed_plug_high_error &&
+                (bed_switch_res != bed_plug_high_res) &&
+                (bed_switch_time > bed_plug_high_time)) {
+            // Turn lights on/off per switch
+            // High lights don't turn on in the evening.
+            if ((key_id != 3) || (bed_switch_res == kasa::OFF)) {
+                kasa_bed_plug_high->set_target(bed_switch_res);
+                bed_plug_high_res = kasa::OFF;
+                bed_plug_high_time = current_time;
+            }
+        }
+        if (!bed_switch_error && !bed_plug_low_error && !bed_plug_high_error &&
+                (bed_switch_res != bed_plug_low_res) &&
+                (bed_switch_res != bed_plug_high_res) &&
+                (bed_plug_low_res == bed_plug_high_res) &&
+                ((bed_switch_time < bed_plug_low_time) ||
+                 (bed_switch_time < bed_plug_high_time))) {
+            // Plugs have changed more recently than the switch.
+            // Update the switch to be consistent.
+            kasa_bed_switch->set_target(bed_plug_low_res);
+            bed_switch_res = bed_plug_low_res;
+            bed_switch_time = current_time;
         }
 
         // Office switch control
@@ -198,17 +228,6 @@ protected:
             // Plugs have changed more recently than the switch.
             // Update the switch to be consistent.
             kasa_office_switch->set_target(office_plug_res);
-        }
-
-        if (current_time >= get_key_time(current_time, key_id) + duration(60*60*4)) {
-            // Shut off the lights after 4 hours in case we forget or go on vacation.
-            if ((bed_plug_low_res == kasa::ON) && (current_time >= bed_plug_low_time + duration(60*60*4))) {
-                kasa_bed_plug_low->set_target(kasa::OFF);
-            }
-
-            if ((bed_plug_high_res == kasa::ON) && (current_time >= bed_plug_high_time + duration(60*60*4))) {
-                kasa_bed_plug_high->set_target(kasa::OFF);
-            }
         }
 
         if (bed_plug_low_res == kasa::ON) {

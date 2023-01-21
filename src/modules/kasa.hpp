@@ -40,10 +40,12 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     time_point toggle_time = now_floor();
     time_point last_time_on = now_floor(), last_time_off = now_floor();
+    bool recent_error = false;
     time_point connect_time;
     int res = UNKNOWN, tgt = UNCHANGED;
     int res_brightness = 0;
     int start_brightness = 0, end_brightness = 0;
+    int res_power_mw = -1, res_total_wh = -1;
     time_point start_time = now_floor(), end_time = now_floor();
     std::mutex mtx;
 
@@ -84,7 +86,8 @@ protected:
     // cooldown period has completed. This ensures that the device is not
     // damaged by excessive/quick toggling on and off.
     ////////////////////////////////////////////////////////////////////////////
-    void sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness, bool last);
+    void sync_device(int tgt, int tgt_brightness, int* res, int* res_brightness,
+        int* res_power_mw, int* res_total_wh, bool last);
 
     ////////////////////////////////////////////////////////////////////////////
     // Write the target state to the device and query the current state.
@@ -101,6 +104,8 @@ public:
     // up-to-date.
     ////////////////////////////////////////////////////////////////////////////
     int get_status();
+    int get_power_mw();
+    int get_total_wh();
 
     ////////////////////////////////////////////////////////////////////////////
     // Gets the target device state which will be applied on the next sync.
@@ -140,8 +145,10 @@ public:
     ////////////////////////////////////////////////////////////////////////////
     // Start the KASA runtime.
     ////////////////////////////////////////////////////////////////////////////
-    kasa(char* name, char* addr, int cooldown = 5, int error_cooldown = 15);
-    kasa(const char* name, const char* addr, int cooldown = 5, int error_cooldown = 15);
+    kasa(char* name, char* addr, int update_frequency = 1,
+        int cooldown = 5, int error_cooldown = 15);
+    kasa(const char* name, const char* addr, int update_frequency = 1,
+        int cooldown = 5, int error_cooldown = 15);
 };
 
 #endif
