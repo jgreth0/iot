@@ -40,8 +40,8 @@ void presence_icmp::sync(bool last) {
     char report_str[256];
 
     if (last) {
-        report("DEVICE_PRESENCE_UNKNOWN", 2, true);
         close(sock);
+        update_last();
         return;
     }
 
@@ -83,78 +83,12 @@ void presence_icmp::sync(bool last) {
     close(sock);
     sock = -1;
 
-    std::unique_lock<std::mutex> lck(mtx);
-
-    // Refresh last_time_not_present so that it will equal the precise time that
-    // the device is first seen again.
-    if (!((now_floor() - last_time_present) < time_limit))
-        last_time_not_present = now_floor();
-    // last_time_present is updated only at the times when we actually see the device.
-
     if (pkt.type == ICMP_ECHOREPLY) {
         // The device was seen.
-        last_time_present = now_floor();
-        lck.unlock();
-        if (!presence_reported || !last_reported) {
-            report("DEVICE_PRESENT", 2, true);
-            notify_listeners();
-        }
-        presence_reported = true;
-        last_reported = true;
-    } else if (!((now_floor() - last_time_present) < time_limit)) {
-        // The device has not been seen for a while.
-        last_time_not_present = now_floor();
-        lck.unlock();
-        if (!presence_reported || last_reported) {
-            report("DEVICE_NOT_PRESENT", 2, true);
-            notify_listeners();
-        }
-        presence_reported = true;
-        last_reported = false;
+        update_present(now_floor());
+    } else {
+        update_not_present();
     }
-    close(sock);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-bool presence_icmp::present() {
-    report("present() called", 5);
-    std::unique_lock<std::mutex> lck(mtx);
-    bool p = (now_floor() - last_time_present) < time_limit;
-    lck.unlock();
-    report("present() complete", 5);
-    return p;
-}
-
-////////////////////////////////////////////////////////////////////////////
-// When was the device last detected
-// If the device was detected within the time limit, returns now_floor()
-////////////////////////////////////////////////////////////////////////////
-presence_icmp::time_point presence_icmp::get_last_time_present() {
-    report("get_last_time_present() called", 5);
-    std::unique_lock<std::mutex> lck(mtx);
-    bool p = (now_floor() - last_time_present) < time_limit;
-    time_point t = last_time_present;
-    if (p) t = now_floor();
-    lck.unlock();
-    report("get_last_time_present() complete", 5);
-    return t;
-}
-
-////////////////////////////////////////////////////////////////////////////
-// When was the device last undetected for at least time_limit seconds?
-// If the device was not detected within the time limit, returns now_floor()
-////////////////////////////////////////////////////////////////////////////
-presence_icmp::time_point presence_icmp::get_last_time_not_present() {
-    report("get_last_time_not_present() called", 5);
-    std::unique_lock<std::mutex> lck(mtx);
-    bool p = (now_floor() - last_time_present) < time_limit;
-    time_point t = last_time_not_present;
-    if (!p) t = now_floor();
-    lck.unlock();
-    report("get_last_time_not_present() complete", 5);
-    return t;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -166,8 +100,22 @@ presence_icmp::presence_icmp(char* name, char* addr, int time_limit) {
     snprintf(name_full, 64, "PRESENCE ICMP [ %s @ %s ]", name, addr);
     set_name(name_full);
     this->time_limit = duration(time_limit);
-    last_time_present = now_floor() - this->time_limit;
-    last_time_not_present = last_time_not_present;
+
+    last_time_present = scan_report("DEVICE_PRESENT");
+    last_time_not_present = scan_report("DEVICE_NOT_PRESENT");
+
+    report("constructor done", 3);
+}
+
+presence_icmp::presence_icmp(const char* name, const char* addr, int time_limit) {
+    strncpy(this->addr, addr, 64);
+    char name_full[64];
+    snprintf(name_full, 64, "PRESENCE ICMP [ %s @ %s ]", name, addr);
+    set_name(name_full);
+    this->time_limit = duration(time_limit);
+
+    last_time_present = scan_report("DEVICE_PRESENT");
+    last_time_not_present = scan_report("DEVICE_NOT_PRESENT");
 
     report("constructor done", 3);
 }

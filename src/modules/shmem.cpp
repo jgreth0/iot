@@ -14,7 +14,7 @@
 shmem::shmem(const char* device, int size, signal_handler* sigio_handler) :
         module { false } {
     char name[64];
-    snprintf(name, 64, "TELEMETRY [ %s ]", device);
+    snprintf(name, 64, "SHMEM [ %s ]", device);
     set_name(name);
     report("constructor called", 5);
     if (shared_mem != nullptr) return;

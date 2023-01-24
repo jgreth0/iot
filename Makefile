@@ -5,6 +5,7 @@ MODULE_OBJ= \
     obj/modules/module.o \
     obj/modules/presence_icmp.o \
     obj/modules/presence_wrap.o \
+    obj/modules/presence_shmem.o \
     obj/modules/shmem.o \
     obj/modules/signal_handler.o
 

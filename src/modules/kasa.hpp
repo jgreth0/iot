@@ -31,8 +31,7 @@ private:
     // Configuration - only written by the constructor.
     ////////////////////////////////////////////////////////////////////////////
     char addr[64];
-    duration cooldown;
-    duration error_cooldown;
+    duration cooldown, error_cooldown, current_error_cooldown;
 
     ////////////////////////////////////////////////////////////////////////////
     // Status information - updated on every sync()

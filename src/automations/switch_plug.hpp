@@ -10,7 +10,7 @@
 #include <cstring>
 
 ////////////////////////////////////////////////////////////////////////////////
-// This module implements a set of rules for controlling a smart plug with a
+// This automation implements a set of rules for controlling a smart plug with a
 // smart switch. This is useful in case some lamps are connected to an outlet
 // which is not controlled by the room switch. This automation simulates a
 // direct switch/outlet connection. This also provides an opportunity to turn
@@ -19,7 +19,7 @@
 // cannot turn the light on when the plug is off. With this setup, there is no
 // such limitation.)
 //
-// Users of this codebase are expected to replace this module with something
+// Users of this codebase are expected to replace this automation with something
 // that implements their own desired rules. This is just one example.
 ////////////////////////////////////////////////////////////////////////////////
 class switch_plug : public module {

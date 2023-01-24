@@ -6,9 +6,10 @@
 #include <cstring>
 
 ////////////////////////////////////////////////////////////////////////////////
-// This module implements a set of rules for tuning on and off outside lights.
+// This automation implements a set of rules for tuning on and off outside
+// lights.
 //
-// Users of this codebase are expected to replace this module with something
+// Users of this codebase are expected to replace this automation with something
 // that implements their own desired rules. This is just one example.
 ////////////////////////////////////////////////////////////////////////////////
 class outside_lights : public module {

@@ -91,7 +91,21 @@ void kasa::send_recv(char* data, int data_len, bool last) {
     }
 
     if (error_detected) {
-        if (connect_time + error_cooldown <= now_floor()) {
+        if (connect_time + current_error_cooldown <= now_floor()) {
+
+            // Increase the time exponentially after each consecutive failure.
+            // If the device is unplugged, this will limit the number of retries
+            // throughout the day. If the device is missing temporarily, this
+            // will increase the recovery time but not by more than the missing
+            // time. The value is reset when the connection is successful.
+            current_error_cooldown += duration(rand() % current_error_cooldown.count());
+            // Cap the retry time at 60min.
+            if (current_error_cooldown > duration(60*60))
+                current_error_cooldown /= 2;
+
+            // TODO: Consider switching to icmp checks as a light weight method
+            // to determine a good retry time.
+
             error_detected = false;
 
             report("Connection error. Retrying...", 3);
@@ -144,6 +158,7 @@ void kasa::send_recv(char* data, int data_len, bool last) {
         decode(data, recv(sock, data, data_len, 0));
         sprintf(report_str, "Message received: %s", data);
         report(report_str, 6);
+        current_error_cooldown = error_cooldown;
     }
     else {
         data[0] = '\0';
@@ -284,7 +299,7 @@ void kasa::sync(bool last) {
     sprintf(report_str, "state: %s", STATES[res_prev]);
     report(report_str, 2, true);
     if (this->res_total_wh != -1) {
-        sprintf(report_str, "power: %d", res_total_wh);
+        sprintf(report_str, "power: %d", this->res_total_wh);
         report(report_str, 2, true);
     }
     sprintf(report_str, "state: %s", STATES[res]);
@@ -425,6 +440,7 @@ kasa::kasa(char* name, char* addr, int update_frequency,
     strncpy(this->addr, addr, 64);
     this->cooldown = duration(cooldown);
     this->error_cooldown = duration(error_cooldown);
+    this->current_error_cooldown = duration(error_cooldown);
     connect_time = now_floor() - this->error_cooldown;
 
     char report_str[256], time_str[64];
@@ -454,6 +470,7 @@ kasa::kasa(const char* name, const char* addr, int update_frequency,
     strncpy(this->addr, addr, 64);
     this->cooldown = duration(cooldown);
     this->error_cooldown = duration(error_cooldown);
+    this->current_error_cooldown = duration(error_cooldown);
     connect_time = now_floor() - this->error_cooldown;
 
     char report_str[256], time_str[64];

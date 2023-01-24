@@ -1,8 +1,10 @@
 
 #include "modules/signal_handler.hpp"
+#include "modules/presence_icmp.hpp"
 #include "automations/air_filter.hpp"
 #include "automations/switch_plug.hpp"
 #include "automations/outside_lights.hpp"
+#include "automations/subwoofer.hpp"
 
 #include <execinfo.h>
 #include <unistd.h>
@@ -37,33 +39,37 @@ void iot() {
     shed_lights.enable();
     kasa garage_lights = kasa("light_garage", "10.4.3.1", 5);
     garage_lights.enable();
-    kasa freezer = kasa("freezer", "10.4.2.2", 5);
-    freezer.enable();
-    kasa car = kasa("car", "10.4.2.3", 5);
-    car.enable();
-    // kasa dehumidifier = kasa("dehumidifier", "10.4.2.5", 5);
-    // dehumidifier.enable();
-    kasa tv_plug = kasa("tv_plug", "10.4.2.6", 5);
-    tv_plug.enable();
-    // kasa plug_pm_7 = kasa("plug_pm_7", "10.4.2.7", 5);
-    // plug_pm_7.enable();
-    // kasa plug_pm_8 = kasa("plug_pm_8", "10.4.2.8", 5);
-    // plug_pm_8.enable();
+    kasa freezer_plug = kasa("freezer", "10.4.2.2", 5);
+    freezer_plug.enable();
+    kasa car_plug = kasa("car", "10.4.2.3", 5);
+    car_plug.enable();
+    kasa dehumidifier_plug = kasa("dehumidifier", "10.4.2.5", 5);
+    dehumidifier_plug.enable();
+    // kasa pm_6_plug = kasa("pm_6", "10.4.2.6", 5);
+    // pm_6_plug.enable();
+    kasa bose_plug = kasa("bose", "10.4.2.1", 5);
+    bose_plug.enable();
+
+    // Subwoofer control
+    kasa subwoofer_plug = kasa("subwoofer", "10.4.0.1", 5);
+    subwoofer_plug.enable();
+    presence_icmp tv_presence = presence_icmp("TV", "10.2.0.3", 300);
+    tv_presence.enable();
 
     // Air filter control
-    kasa air_filter_plug = kasa("air_filter", "10.4.0.2", 5);
+    kasa air_filter_plug = kasa("air_filter", "10.4.2.8", 5);
     air_filter_plug.enable();
 
     // Switch+plug
     kasa kasa_bed_switch = kasa("bed_switch", "10.4.1.9", 1);
     kasa_bed_switch.enable();
-    kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.0.1", 5);
+    kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.2.7", 5);
     kasa_bed_plug_low.enable();
     kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1", 5);
     kasa_bed_plug_high.enable();
     kasa kasa_office_switch = kasa("office_switch", "10.4.1.2", 1);
     kasa_office_switch.enable();
-    kasa kasa_office_plug = kasa("office_plug", "10.4.2.1", 5);
+    kasa kasa_office_plug = kasa("office_plug", "10.4.0.2", 5);
     kasa_office_plug.enable();
 
     // Outside lights
@@ -91,6 +97,9 @@ void iot() {
         &kasa_office_switch, &kasa_office_plug);
     sp.enable();
 
+    subwoofer sw = subwoofer(&subwoofer_plug, &tv_presence);
+    sw.enable();
+
     outside_lights ol = outside_lights(front_lights, front_ct, rear_lights, rear_ct);
     ol.enable();
 
@@ -98,6 +107,7 @@ void iot() {
 
     // Automations
     ol.disable();
+    sw.disable();
     sp.disable();
     af.disable();
 
@@ -115,15 +125,18 @@ void iot() {
     // Air filter control
     air_filter_plug.disable();
 
+    // Subwoofer control
+    subwoofer_plug.disable();
+    tv_presence.disable();
+
     // Monitor only
     shed_lights.disable();
     garage_lights.disable();
-    freezer.disable();
-    car.disable();
-    // dehumidifier.disable();
-    tv_plug.disable();
-    // plug_pm_7.disable();
-    // plug_pm_8.disable();
+    freezer_plug.disable();
+    car_plug.disable();
+    dehumidifier_plug.disable();
+    bose_plug.disable();
+    // pm_6_plug.disable();
 }
 
 ////////////////////////////////////////////////////////////////////////////////
