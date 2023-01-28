@@ -6,25 +6,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////
-std::mutex module::log_mtx;
-int module::verbosity_limit = 3;
-char module::log_file[256] = "";
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
 void module::management_thread(module* m) {
     std::unique_lock<std::mutex> lck(m->mtx);
     while (true) {
         m->report("[MODULE] management_thread loop", 5);
-        m->default_update = true;
         if (m->key_times.empty()) {
+            m->default_update = false;
             // Round up.
             uint64_t uf = m->update_frequency;
             m->next_sync_time = time_point(duration(
                 (((m->now_ceil().time_since_epoch().count() + uf - 1 ) / uf) * uf) +
                 (rand() % m->update_frequency)));
         } else {
+            m->default_update = true;
             int id;
             std::time_t tt = sc::to_time_t(m->now_floor());
             std::tm lt;
@@ -258,7 +252,9 @@ module::duration module::heart_beat_missed() {
 //
 ////////////////////////////////////////////////////////////////////////////////
 module::module(bool automatic, int update_frequency) {
+    char name[64];
     strncpy(name, "MODULE [ empty ]", 64);
+    set_name(name);
     report("[MODULE] constructor", 3);
     this->automatic = automatic;
     this->update_frequency = update_frequency;
@@ -289,129 +285,6 @@ void module::disable() {
     };
     thread.join();
     report("[MODULE] disable() done", 3);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Report an event.
-////////////////////////////////////////////////////////////////////////////////
-void module::report(char* text, int verbosity, bool log) {
-    std::unique_lock<std::mutex> lck(log_mtx);
-    char time_str[64];
-    time_t time = sc::to_time_t(now_floor());
-    strftime(time_str, 64, "%c", std::localtime(&time));
-
-    if (verbosity_limit >= verbosity) {
-        if (log) {
-            if (log_file[0]) {
-                FILE* f = fopen(log_file, "a");
-                if (f) {
-                    fprintf(f, "%s ; %s ; %s\n", time_str, name, text);
-                    fflush(f);
-                    fclose(f);
-                } else {
-                    printf("Failed to open log file (%d): ", errno);
-                    fflush(stdout);
-                    printf("%s\n", log_file);
-                    fflush(stdout);
-                }
-            }
-            printf("%s ; %s ; log <- %s\n", time_str, name, text);
-            fflush(stdout);
-        }
-        else {
-            printf("%s ; %s ; %s\n", time_str, name, text);
-            fflush(stdout);
-        }
-    }
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-void module::report(const char* text, int verbosity, bool log) {
-    char str[256];
-    strncpy(str, text, 256);
-    report(str, verbosity, log);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-// Scan for events.
-////////////////////////////////////////////////////////////////////////////////
-module::time_point module::scan_report(char* text) {
-    std::unique_lock<std::mutex> lck(log_mtx);
-
-    char looking_for[512], input_time_str[512], input_line[512];
-    snprintf(looking_for, 512, "%s ; %s", name, text);
-
-
-    time_point found_time = now_floor();
-
-    if (log_file[0]) {
-        FILE* f = fopen(log_file, "r");
-        if (f) {
-            while (true) {
-                if (fscanf(f, "%512[^;]", input_time_str) == EOF) break;
-                if (fscanf(f, "%512[^\n] ", input_line) == EOF) break;
-                if (nullptr != strstr(input_line, looking_for)) {
-                    // Found a match. Get the time.
-                    struct tm time;
-                    strptime(input_time_str, "%c", &time);
-                    time_t tt = mktime(&time);
-                    found_time = std::chrono::time_point_cast<std::chrono::seconds>(sc::from_time_t(tt));
-                }
-            }
-            fclose(f);
-        }
-    }
-
-    return found_time;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-module::time_point module::scan_report(const char* text) {
-    char str[256];
-    strncpy(str, text, 256);
-    return scan_report(str);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-void module::set_name(char* name) {
-    std::unique_lock<std::mutex> lck(log_mtx);
-    strncpy(this->name, name, 64);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-void module::set_verbosity(int verbosity) {
-    std::unique_lock<std::mutex> lck(log_mtx);
-    verbosity_limit = verbosity;
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-void module::set_log_file(char* log_file) {
-    std::unique_lock<std::mutex> lck(log_mtx);
-    strncpy(module::log_file, log_file, 256);
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-module::time_point module::now_ceil() {
-    return std::chrono::ceil<duration>(sc::now());
-}
-
-////////////////////////////////////////////////////////////////////////////////
-//
-////////////////////////////////////////////////////////////////////////////////
-module::time_point module::now_floor() {
-    return std::chrono::floor<duration>(sc::now());
 }
 
 ////////////////////////////////////////////////////////////////////////////////

@@ -57,7 +57,7 @@ void presence_icmp::sync(bool last) {
         report("Socket created", 5);
     }
 
-    struct timeval tv_out = {.tv_usec = 100};
+    struct timeval tv_out = {.tv_usec = 100000};
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof tv_out);
     int ttl_val = 8;
     setsockopt(sock, SOL_IP, IP_TTL, &ttl_val, sizeof(ttl_val));

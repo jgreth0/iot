@@ -261,6 +261,8 @@ void kasa::sync(bool last) {
     int res_power_mw, res_total_wh;
     sync_device(tgt, tgt_brightness, &res, &res_brightness,
         &res_power_mw, &res_total_wh, last);
+    if (recent_error && ((res == ON) || (res == OFF)))
+        notify_listeners();
     lck.lock();
     if (res == ON ) {
         last_time_on  = now_floor();
@@ -424,7 +426,6 @@ void kasa::set_brightness_target(int start_brightness, int end_brightness,
     this->start_time = start_time;
     this->end_time = end_time;
     lck.unlock();
-    sync_now();
     sprintf(report_str, "set_brightness_target() done");
     report(report_str, 4);
 }

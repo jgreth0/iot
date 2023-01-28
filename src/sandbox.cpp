@@ -1,8 +1,5 @@
 
-#include "modules/signal_handler.hpp"
-#include "automations/air_filter.hpp"
-#include "automations/switch_plug.hpp"
-#include "automations/outside_lights.hpp"
+#include "modules/json_fetcher.hpp"
 
 #include <execinfo.h>
 #include <unistd.h>
@@ -17,10 +14,10 @@
 ////////////////////////////////////////////////////////////////////////////////
 int main(int argc, char *argv[]) {
 
-    char time_str[64];
-    time_t time = module::sc::to_time_t(module::time_point(module::duration(0)));
-    strftime(time_str, 64, "%c", std::localtime(&time));
-    printf("%s\n", time_str);
+    char url[256];
+    snprintf(url, 256, "%s", "https://api.weather.gov/stations/kbed/observations/latest");
+    printf(url);
+    json_fetcher jf = json_fetcher(url);
 
     return 0;
 }

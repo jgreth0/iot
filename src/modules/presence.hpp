@@ -22,6 +22,7 @@ protected:
     virtual void sync(bool last = false) = 0;
 
     void update_not_present() {
+        report("update_not_present() called", 5);
         std::unique_lock<std::mutex> lck(mtx);
         time_point last_time_present = this->last_time_present;
         if ((now_floor() - last_time_present) >= time_limit)
@@ -46,6 +47,7 @@ protected:
     }
 
     void update_present(time_point last_time_present) {
+        report("update_present() called", 5);
         std::unique_lock<std::mutex> lck(mtx);
         if ((now_floor() - this->last_time_present) >= time_limit)
             last_time_not_present = now_floor();
