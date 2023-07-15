@@ -2,14 +2,14 @@
 #ifndef _TIME_CONDITIONAL_AUTOMATION_H_
 #define _TIME_CONDITIONAL_AUTOMATION_H_
 
-#include "automation.hpp"
+#include "time_automation.hpp"
 #include <cstring>
 #include <vector>
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 ////////////////////////////////////////////////////////////////////////////////
-class time_conditional_automation : public automation {
+class time_conditional_automation : public time_automation {
 public:
     static inline const int BEFORE = 0;
     static inline const int AFTER = 1;
@@ -19,8 +19,6 @@ private:
     // 'kasa' modules provide status and control interfaces for interacting with
     // the real world. These are passed in through the constructor.
     ////////////////////////////////////////////////////////////////////////////
-    int hour;
-    int minute;
     int range;
     automation* automation_obj;
 
@@ -28,17 +26,41 @@ protected:
     ////////////////////////////////////////////////////////////////////////////
     //
     ////////////////////////////////////////////////////////////////////////////
-    void sync(time_point current_time) {
-        std::time_t tt = sc::to_time_t(current_time);
-        std::tm lt;
-        localtime_r(&tt, &lt);
+    void sync(time_point current_time, time_point key_time) {
+
+        while (current_time > key_time) {
+            std::time_t tt = sc::to_time_t(current_time);
+            std::tm ct;
+            localtime_r(&tt, &ct);
+
+            tt = sc::to_time_t(key_time);
+            std::tm kt;
+            localtime_r(&tt, &kt);
+
+            if ((kt.tm_yday == ct.tm_yday) && (kt.tm_year == ct.tm_year))
+                break;
+            else {
+                kt.tm_mday += 1;
+                tt = mktime(&kt);
+                key_time = std::chrono::floor<duration>(sc::from_time_t(tt));
+                set_time(key_time);
+            }
+        }
 
         if (range == BEFORE) {
-            if (lt.tm_hour < hour) automation_obj->sync(current_time);
-            else if (lt.tm_hour == hour && lt.tm_min < minute) automation_obj->sync(current_time);
+            if (current_time < key_time) {
+                report("Before, pass", 5);
+                automation_obj->sync(current_time);
+            } else {
+                report("Before, fail", 5);
+            }
         } else if (range == AFTER) {
-            if (lt.tm_hour > hour) automation_obj->sync(current_time);
-            else if (lt.tm_hour == hour && lt.tm_min >= minute) automation_obj->sync(current_time);
+            if (current_time >= key_time) {
+                report("After, pass", 5);
+                automation_obj->sync(current_time);
+            } else {
+                report("After, fail", 5);
+            }
         }
     }
 
@@ -53,8 +75,9 @@ public:
         set_name(name_full);
         this->automation_obj = automation_obj;
         this->range = range;
-        this->hour = hour;
-        this->minute = minute;
+
+        set_time(hour, minute);
+
         report("constructor done", 3);
     }
 };

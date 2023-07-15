@@ -14,10 +14,10 @@ void signalHandler(int signum) {
 class kasa_testbench : public kasa {
 public:
     static void interactive(kasa_testbench* k) {
-        char cmd[1024];
+        char cmd[4096];
         k->enable();
-        while (1 == scanf("%1023s", cmd)) {
-            k->send_recv(cmd, 1024, false);
+        while (1 == scanf("%4096s", cmd)) {
+            k->send_recv(cmd, 4096, false);
             printf("%s\n", cmd);
         }
         k->disable();

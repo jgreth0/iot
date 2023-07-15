@@ -42,15 +42,18 @@ int kasa::encode(char* data) {
 //   by George Georgovassilis. George credits Thomas Baust for providing
 //   the KASA device encoding scheme.
 ////////////////////////////////////////////////////////////////////////////////
-void kasa::decode(char* data, int len) {
+bool kasa::decode(char* data, int len) {
     int msg_len = 0;
     bool ret = true;
     for (int i = 0; i < 4; i++) msg_len = (msg_len << 8) + data[i];
-    if (msg_len < len) len = msg_len;
+    msg_len += 4;
+    if (msg_len > len) return false;
+    len = msg_len;
     if (len < 4) len = 4; // For safety in error cases.
     data[3] = 171;
     for (int i = 0; i < len-4; i++) data[i] = data[i+3] ^ data[i+4];
     data[len-4] = 0;
+    return true;
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -71,6 +74,15 @@ void kasa::send_recv(char* data, int data_len, bool last) {
 
     bool error_detected = false;
 
+    // Clear the read buffer.
+    while (true) {
+        struct pollfd pfd = {.fd = sock, .events = POLLIN};
+        poll(&pfd, 1, 0);
+        if (pfd.revents != POLLIN) break;
+        char temp;
+        recv(sock, &temp, 1, 0);
+    }
+
     // Send the encoded command.
     sprintf(report_str, "Message sent: %s", data);
     report(report_str, 6);
@@ -84,27 +96,26 @@ void kasa::send_recv(char* data, int data_len, bool last) {
         // Wait for a response.
         // Timeout after 400ms. State checks take <100ms, but compound
         // commands (set and check) may take a bit longer.
-        struct pollfd pfd = {.fd = sock, .events = POLLIN};
-        poll(&pfd, 1, 400);
-        if (pfd.revents != POLLIN)
-            error_detected = true;
+        int poll_time = 400;
+
+        int recv_len = 0;
+        bool decode_res = false;
+        do {
+            struct pollfd pfd = {.fd = sock, .events = POLLIN};
+            poll(&pfd, 1, poll_time);
+            if (pfd.revents != POLLIN || (data_len == recv_len))
+                error_detected = true;
+            else {
+                recv_len += recv(sock, data+recv_len, data_len-recv_len, 0);
+                decode_res = decode(data, recv_len);
+            }
+            poll_time = 100;
+        } while (!error_detected && !decode_res && (recv_len < data_len));
+        if (!decode_res) error_detected = true;
     }
 
     if (error_detected) {
-        if (connect_time + current_error_cooldown <= now_floor()) {
-
-            // Increase the time exponentially after each consecutive failure.
-            // If the device is unplugged, this will limit the number of retries
-            // throughout the day. If the device is missing temporarily, this
-            // will increase the recovery time but not by more than the missing
-            // time. The value is reset when the connection is successful.
-            current_error_cooldown += duration(rand() % current_error_cooldown.count());
-            // Cap the retry time at 60min.
-            if (current_error_cooldown > duration(60*60))
-                current_error_cooldown /= 2;
-
-            // TODO: Consider switching to icmp checks as a light weight method
-            // to determine a good retry time.
+        if (ping.ping()) {
 
             error_detected = false;
 
@@ -129,18 +140,31 @@ void kasa::send_recv(char* data, int data_len, bool last) {
             if (pfd.revents != POLLOUT)
                 error_detected = true;
 
-            if (encode_len != write(sock, data, encode_len))
+            if (encode_len != write(sock, data, encode_len)) {
                 error_detected = true;
+            } else {
+                // Wait for a response.
+                // Timeout after 400ms. State checks take <100ms, but compound
+                // commands (set and check) may take a bit longer.
+                int poll_time = 400;
+
+                int recv_len = 0;
+                bool decode_res = false;
+                do {
+                    struct pollfd pfd = {.fd = sock, .events = POLLIN};
+                    poll(&pfd, 1, poll_time);
+                    if (pfd.revents != POLLIN || (data_len == recv_len))
+                        error_detected = true;
+                    else {
+                        recv_len += recv(sock, data+recv_len, data_len-recv_len, 0);
+                        decode_res = decode(data, recv_len);
+                    }
+                    poll_time = 100;
+                } while (!error_detected && !decode_res && (recv_len < data_len));
+                if (!decode_res) error_detected = true;
+            }
 
             connect_time = now_floor();
-
-            // Wait for a response.
-            // Timeout after 400ms. State checks take <100ms, but compound
-            // commands (set and check) may take a bit longer.
-            pfd = {.fd = sock, .events = POLLIN};
-            poll(&pfd, 1, 400);
-            if (pfd.revents != POLLIN)
-                error_detected = true;
 
             if (error_detected) {
                 report("Connection error was not resolved. Returning error.", 3);
@@ -152,13 +176,8 @@ void kasa::send_recv(char* data, int data_len, bool last) {
     }
 
     if (!error_detected) {
-        // The socket has data to receive.
-        // Fetch and decode it.
-        report("decoding response from the device", 5);
-        decode(data, recv(sock, data, data_len, 0));
         sprintf(report_str, "Message received: %s", data);
         report(report_str, 6);
-        current_error_cooldown = error_cooldown;
     }
     else {
         data[0] = '\0';
@@ -287,6 +306,7 @@ void kasa::sync(bool last) {
     this->res_brightness = res_brightness;
     if (res_power_mw != -1) this->res_power_mw = res_power_mw;
     if (res_total_wh != -1) this->res_total_wh = res_total_wh;
+    res_total_wh = this->res_total_wh;
     if (res == this->tgt) this->tgt = UNCHANGED;
     if (this->res == res) return;
     // The value has changed.
@@ -300,8 +320,12 @@ void kasa::sync(bool last) {
     char report_str[256];
     sprintf(report_str, "state: %s", STATES[res_prev]);
     report(report_str, 2, true);
-    if (this->res_total_wh != -1) {
-        sprintf(report_str, "power: %d", this->res_total_wh);
+    if (res_total_wh != -1) {
+        sprintf(report_str, "power: %d", res_total_wh);
+        report(report_str, 2, true);
+    }
+    if (res_brightness != 0) {
+        sprintf(report_str, "brightness: %d", res_brightness);
         report(report_str, 2, true);
     }
     sprintf(report_str, "state: %s", STATES[res]);
@@ -434,14 +458,13 @@ void kasa::set_brightness_target(int start_brightness, int end_brightness,
 // Start the KASA runtime.
 ////////////////////////////////////////////////////////////////////////////////
 kasa::kasa(char* name, char* addr, int update_frequency,
-        int cooldown, int error_cooldown) : module(true, update_frequency) {
+        int cooldown, int error_cooldown) : module(true, update_frequency), ping{addr} {
     char name_full[64];
     snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
     set_name(name_full);
     strncpy(this->addr, addr, 64);
     this->cooldown = duration(cooldown);
     this->error_cooldown = duration(error_cooldown);
-    this->current_error_cooldown = duration(error_cooldown);
     connect_time = now_floor() - this->error_cooldown;
 
     char report_str[256], time_str[64];
@@ -464,14 +487,13 @@ kasa::kasa(char* name, char* addr, int update_frequency,
 }
 
 kasa::kasa(const char* name, const char* addr, int update_frequency,
-        int cooldown, int error_cooldown) : module(true, update_frequency) {
+        int cooldown, int error_cooldown) : module(true, update_frequency), ping{addr} {
     char name_full[64];
     snprintf(name_full, 64, "KASA [ %s @ %s ]", name, addr);
     set_name(name_full);
     strncpy(this->addr, addr, 64);
     this->cooldown = duration(cooldown);
     this->error_cooldown = duration(error_cooldown);
-    this->current_error_cooldown = duration(error_cooldown);
     connect_time = now_floor() - this->error_cooldown;
 
     char report_str[256], time_str[64];

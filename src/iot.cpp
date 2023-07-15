@@ -53,7 +53,7 @@ void iot() {
     car_plug.enable();
     kasa dehumidifier_plug = kasa("dehumidifier", "10.4.2.5", 5);
     dehumidifier_plug.enable();
-    kasa attic_fan = kasa("attic_fan", "10.4.3.10", 5);
+    kasa attic_fan = kasa("attic_fan", "10.4.1.10", 5);
     attic_fan.enable();
 
     // vegetable light
@@ -86,7 +86,8 @@ void iot() {
     kasa kasa_bed_plug_low = kasa("bed_plug_low", "10.4.2.7", 5);
     kasa_bed_plug_low.enable();
     kasa_bed_plug_low.listen(&am);
-    kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1", 5);
+    //kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.5.1", 5);
+    kasa kasa_bed_plug_high = kasa("bed_plug_high", "10.4.2.12", 5);
     kasa_bed_plug_high.enable();
     kasa_bed_plug_high.listen(&am);
     kasa kasa_office_switch = kasa("office_switch", "10.4.1.2", 1);
@@ -151,25 +152,25 @@ void iot() {
     am.add_automation(&bed_timer);
 
     // Set dimmer states
-    kasa_dimmer dimmer_rise = kasa_dimmer(&kasa_bed_plug_high, "rise", 1, 35, 7, 30, 900);
-    time_conditional_automation dimmer_rise_before = time_conditional_automation(
-        "dimmer rise before", &dimmer_rise, time_conditional_automation::BEFORE, 7, 30);
-    am.add_automation(&dimmer_rise_before);
-    kasa_dimmer dimmer_hold = kasa_dimmer(&kasa_bed_plug_high, "hold", 100, 100, 7, 45, 0);
-    time_conditional_automation dimmer_hold_after  = time_conditional_automation(
-        "dimmer hold after ", &dimmer_hold      , time_conditional_automation::AFTER ,  7, 45);
-    time_conditional_automation dimmer_hold_before = time_conditional_automation(
-        "dimmer hold before", &dimmer_hold_after, time_conditional_automation::BEFORE, 20, 45);
-    am.add_automation(&dimmer_hold_before);
-    kasa_dimmer dimmer_fall = kasa_dimmer(&kasa_bed_plug_high, "fall", 35, 1, 20, 45, 900);
-    time_conditional_automation dimmer_fall_after  = time_conditional_automation(
-        "dimmer fall after ", &dimmer_fall      , time_conditional_automation::AFTER ,  20, 45);
-    am.add_automation(&dimmer_fall_after);
+    // kasa_dimmer dimmer_rise = kasa_dimmer(&kasa_bed_plug_high, "rise", 1, 35, 7, 30, 900);
+    // time_conditional_automation dimmer_rise_before = time_conditional_automation(
+    //     "dimmer rise before", &dimmer_rise, time_conditional_automation::BEFORE, 7, 30);
+    // am.add_automation(&dimmer_rise_before);
+    // kasa_dimmer dimmer_hold = kasa_dimmer(&kasa_bed_plug_high, "hold", 100, 100, 7, 45, 0);
+    // time_conditional_automation dimmer_hold_after  = time_conditional_automation(
+    //     "dimmer hold after ", &dimmer_hold      , time_conditional_automation::AFTER ,  7, 45);
+    // time_conditional_automation dimmer_hold_before = time_conditional_automation(
+    //     "dimmer hold before", &dimmer_hold_after, time_conditional_automation::BEFORE, 20, 45);
+    // am.add_automation(&dimmer_hold_before);
+    // kasa_dimmer dimmer_fall = kasa_dimmer(&kasa_bed_plug_high, "fall", 35, 1, 20, 45, 900);
+    // time_conditional_automation dimmer_fall_after  = time_conditional_automation(
+    //     "dimmer fall after ", &dimmer_fall      , time_conditional_automation::AFTER ,  20, 45);
+    // am.add_automation(&dimmer_fall_after);
 
     presence_ctrl sw = presence_ctrl("subwoofer", &subwoofer_plug, &tv_presence);
     am.add_automation(&sw);
 
-    kasa_alarm af_on  = kasa_alarm(&air_filter_plug, "AF ON ", kasa::ON , 7, 30);
+    kasa_alarm af_on  = kasa_alarm(&air_filter_plug, "AF ON ", kasa::ON , 7, 30, 60);
     am.add_automation(&af_on);
     kasa_alarm af_off = kasa_alarm(&air_filter_plug, "AF OFF", kasa::OFF, 8, 30);
     am.add_automation(&af_off);
@@ -196,11 +197,11 @@ void iot() {
     kasa_alarm morning_light_front_pole    = kasa_alarm(&light_front_pole   , "morning_light_front_pole   ", kasa::OFF, 7, 0);
     am.add_automation(&morning_light_front_pole);
 
-    kasa_alarm evening_light_tree_xmas     = kasa_alarm(&light_tree_xmas    , "evening_light_tree_xmas    ", kasa::ON, 19, 0);
+    kasa_alarm evening_light_tree_xmas     = kasa_alarm(&light_tree_xmas    , "evening_light_tree_xmas    ", kasa::ON, 20, 15, 60);
     am.add_automation(&evening_light_tree_xmas);
-    kasa_alarm evening_light_front_porch   = kasa_alarm(&light_front_porch  , "evening_light_front_porch  ", kasa::ON, 19, 0);
+    kasa_alarm evening_light_front_porch   = kasa_alarm(&light_front_porch  , "evening_light_front_porch  ", kasa::ON, 20, 15, 60);
     am.add_automation(&evening_light_front_porch);
-    kasa_alarm evening_light_front_garage  = kasa_alarm(&light_front_garage , "evening_light_front_garage ", kasa::ON, 19, 0);
+    kasa_alarm evening_light_front_garage  = kasa_alarm(&light_front_garage , "evening_light_front_garage ", kasa::ON, 20, 15, 60);
     am.add_automation(&evening_light_front_garage);
 
     automation_group night_lights = automation_group("night lights");

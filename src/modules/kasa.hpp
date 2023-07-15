@@ -3,6 +3,7 @@
 #define _KASA_H_
 
 #include "module.hpp"
+#include "icmp_helper.hpp"
 #include <thread>
 #include <string>
 #include <chrono>
@@ -31,7 +32,8 @@ private:
     // Configuration - only written by the constructor.
     ////////////////////////////////////////////////////////////////////////////
     char addr[64];
-    duration cooldown, error_cooldown, current_error_cooldown;
+    icmp_helper ping;
+    duration cooldown, error_cooldown;
 
     ////////////////////////////////////////////////////////////////////////////
     // Status information - updated on every sync()
@@ -64,7 +66,7 @@ private:
     // Decode a response from a KASA device. The operation is done in-place in
     // the data buffer.
     ////////////////////////////////////////////////////////////////////////////
-    void decode(char* data, int len);
+    bool decode(char* data, int len);
 
 protected:
     ////////////////////////////////////////////////////////////////////////////

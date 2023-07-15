@@ -15,7 +15,7 @@
 int main(int argc, char *argv[]) {
 
     char url[256];
-    snprintf(url, 256, "%s", "https://api.weather.gov/stations/kbed/observations/latest");
+    snprintf(url, 256, "%s", "httpss://api.weather.gov/stations/kbed/observations/latest");
     printf(url);
     json_fetcher jf = json_fetcher(url);
 

@@ -38,7 +38,13 @@ json_fetcher::json_fetcher(char* url) {
         //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
         //curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)(&rawJson));
 
+        curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20);
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:59.0) Gecko/20100101 Firefox/59.0");
+        // curl_easy_setopt(curl, CURLOPT_RETURNTRANSFER, true);
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, true);
         /* Perform the request, res will get the return code */
+        // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
+        // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYHOST, 0L);
         curl_easy_perform(curl);
         /* always cleanup */
         curl_easy_cleanup(curl);
