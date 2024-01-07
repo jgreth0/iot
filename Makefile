@@ -17,13 +17,16 @@ $(shell mkdir -p obj/modules bin)
 
 .SECONDARY:
 
-all: bin/sandbox bin/iot bin/kasa_standalone bin/kasa_testbench bin/presence_standalone
+all: bin/sandbox bin/iot bin/kasa_standalone bin/kasa_testbench bin/presence_standalone bin/sun_time_test
 
 obj/%.o: src/%.cpp src/modules/*.hpp
 	g++ $(CPPFLAGS) src/$*.cpp -o $@
 
 obj/iot.o: src/iot.cpp src/automations/*.hpp src/modules/*.hpp
 	g++ $(CPPFLAGS) src/iot.cpp -o $@
+
+obj/sun_time_test.o: src/sun_time_test.cpp src/automations/*.hpp src/modules/*.hpp
+	g++ $(CPPFLAGS) src/sun_time_test.cpp -o $@
 
 bin/%: obj/%.o $(MODULE_OBJ)
 	g++ $(LDFLAGS) -o $@ $^ -lcurl -ljsoncpp

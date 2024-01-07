@@ -13,8 +13,8 @@ void curl_callback(void* contents, size_t size, size_t nmemb, void* userp) {
 }
 
 json_fetcher::~json_fetcher() {
-    Json::Value* root = (Json::Value*)json_obj;
-    root->~Value();
+    // Json::Value* root = (Json::Value*)json_obj;
+    // root->~Value();
 
     curl_mtx.lock();
     curl_init_count--;
@@ -29,14 +29,15 @@ json_fetcher::json_fetcher(char* url) {
         curl_global_init(CURL_GLOBAL_ALL);
     curl_init_count++;
     curl_mtx.unlock();
+    strncpy(raw_str, "", 512);
 
     std::string rawJson = "";
 
     CURL *curl = curl_easy_init();
     if (curl) {
         curl_easy_setopt(curl, CURLOPT_URL, url);
-        //curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
-        //curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)(&rawJson));
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*)(&rawJson));
 
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 20);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 6.1; Win64; x64; rv:59.0) Gecko/20100101 Firefox/59.0");
@@ -50,18 +51,18 @@ json_fetcher::json_fetcher(char* url) {
         curl_easy_cleanup(curl);
     }
 
-    printf("%s\n", rawJson.c_str());
+    strncpy(raw_str, rawJson.c_str(), 512);
 
-    const auto rawJsonLength = static_cast<int>(rawJson.length());
-    JSONCPP_STRING err;
-    Json::Value* root = new Json::Value();
+    // const auto rawJsonLength = static_cast<int>(rawJson.length());
+    // JSONCPP_STRING err;
+    // Json::Value* root = new Json::Value();
 
-    Json::CharReaderBuilder builder;
-    const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
-    if (!reader->parse(rawJson.c_str(), rawJson.c_str() + rawJsonLength, root, &err)) {
-        root = NULL;
-    }
-    json_obj = root;
+    // Json::CharReaderBuilder builder;
+    // const std::unique_ptr<Json::CharReader> reader(builder.newCharReader());
+    // if (!reader->parse(rawJson.c_str(), rawJson.c_str() + rawJsonLength, root, &err)) {
+    //     root = NULL;
+    // }
+    // json_obj = root;
 }
 
 bool json_fetcher::query(char* q_str, void* res, int* res_len) {

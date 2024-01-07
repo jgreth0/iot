@@ -16,6 +16,8 @@ public:
     ~json_fetcher();
 
     bool query(char* q_str, void* res, int* res_len);
+
+    char raw_str[512];
 };
 
 #endif

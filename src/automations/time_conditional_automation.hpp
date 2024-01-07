@@ -21,31 +21,13 @@ private:
     ////////////////////////////////////////////////////////////////////////////
     int range;
     automation* automation_obj;
+    int hour, minute;
 
 protected:
     ////////////////////////////////////////////////////////////////////////////
     //
     ////////////////////////////////////////////////////////////////////////////
     void sync(time_point current_time, time_point key_time) {
-
-        while (current_time > key_time) {
-            std::time_t tt = sc::to_time_t(current_time);
-            std::tm ct;
-            localtime_r(&tt, &ct);
-
-            tt = sc::to_time_t(key_time);
-            std::tm kt;
-            localtime_r(&tt, &kt);
-
-            if ((kt.tm_yday == ct.tm_yday) && (kt.tm_year == ct.tm_year))
-                break;
-            else {
-                kt.tm_mday += 1;
-                tt = mktime(&kt);
-                key_time = std::chrono::floor<duration>(sc::from_time_t(tt));
-                set_time(key_time);
-            }
-        }
 
         if (range == BEFORE) {
             if (current_time < key_time) {
@@ -62,6 +44,8 @@ protected:
                 report("After, fail", 5);
             }
         }
+
+        set_time(hour, minute);
     }
 
 public:
@@ -69,13 +53,16 @@ public:
     //
     ////////////////////////////////////////////////////////////////////////////
     time_conditional_automation(const char* name, automation* automation_obj,
-            int range = BEFORE, int hour = 0, int minute = 0) {
+            int range = BEFORE, int hour = 0, int minute = 0, sun_time_fetcher* stf = NULL) {
         char name_full[64];
         snprintf(name_full, 64, "CONDITIONAL [ %s ]", name);
         set_name(name_full);
         this->automation_obj = automation_obj;
         this->range = range;
+        this->hour = hour;
+        this->minute = minute;
 
+        set_snap(stf);
         set_time(hour, minute);
 
         report("constructor done", 3);

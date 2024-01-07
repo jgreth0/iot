@@ -40,6 +40,9 @@ bool icmp_helper::ping() {
 
     // SOCK_RAW may be needed on other systems.
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_ICMP);
+    if (sock <= 0) {
+        printf("ICMP Sock Error. sock: %d, errno: %d\n", sock, errno);
+    }
 
     struct timeval tv_out = {.tv_usec = time_limit};
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv_out, sizeof tv_out);

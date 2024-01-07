@@ -3,6 +3,7 @@
 #define _TIME_AUTOMATION_H_
 
 #include "automation.hpp"
+#include "../modules/sun_time_fetcher.hpp"
 
 ////////////////////////////////////////////////////////////////////////////////
 // Sends a command at a specified time
@@ -11,9 +12,11 @@ class time_automation : public automation {
 private:
     time_point key_time;
     std::mutex mtx;
+    sun_time_fetcher* snap_source = NULL;
 
 public:
     virtual void sync(time_point current_time, time_point key_time) {}
+
     void sync(time_point current_time) {
         std::unique_lock<std::mutex> lck(mtx);
         time_point kt = key_time;
@@ -35,22 +38,17 @@ public:
         tt = mktime(&lt);
         key_time = std::chrono::floor<duration>(sc::from_time_t(tt));
 
-        if (key_time >= current_time) {
-            lt.tm_mday -= 1;
-            tt = mktime(&lt);
-            key_time = std::chrono::floor<duration>(sc::from_time_t(tt));
+        if (snap_source &&
+                snap_source->key_time < key_time + duration(8*60*60) &&
+                key_time < snap_source->key_time + duration(8*60*60)) {
+            // We are within 8 hours. Snap time.
+            key_time = snap_source->key_time;
         }
     }
 
-    void set_time(time_point key_time) {
+    void set_snap(sun_time_fetcher* snap_source) {
         std::unique_lock<std::mutex> lck(mtx);
-        this->key_time = key_time;
-    }
-
-    void set_time(time_point current_time, time_point key_time) {
-        std::unique_lock<std::mutex> lck(mtx);
-        if (this->key_time > current_time)
-            this->key_time = key_time;
+        this->snap_source = snap_source;
     }
 };
 
